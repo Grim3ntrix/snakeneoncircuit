@@ -1,0 +1,8 @@
+# Claude Code — personal, machine-specific settings (never commit)
+.claude/settings.local.json
+.claude/*.local.json
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini
