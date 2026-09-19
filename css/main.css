@@ -1,0 +1,212 @@
+/* ==========================================================================
+   SNAKE // NEON CIRCUIT
+
+   The palette is declared here and nowhere else. renderer.js reads these same
+   tokens out of :root at init, so the canvas and the CSS chrome cannot drift
+   apart. This is the restrained foundation, not the final art direction.
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* Palette */
+  --bg: #0a0d12;
+  --arena: #11161f;
+  --grid: #1b2230;
+  --frame: #2a3446;
+  --snake-head: #7cffc4;
+  --snake-body: #3ddc97;
+  --food: #ff5c7a;
+
+  /* Text — both pass WCAG AA against --bg and against the overlay scrim */
+  --ink: #e8eef7;
+  --ink-dim: #93a1b5;
+
+  /* Spacing scale */
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+
+  /* Type scale */
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+
+  /* Motion */
+  --duration-fast: 140ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.3, 1);
+
+  --radius-md: 10px;
+
+  --tracking-wide: 0.14em;
+
+  --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", "Segoe UI Mono", Menlo,
+    Consolas, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Layout ------------------------------------------------------------------ */
+
+.shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--space-4);
+  /* dvh, not vh: mobile browser chrome must not push the board off-screen. */
+  height: 100dvh;
+  max-width: 46rem;
+  margin-inline: auto;
+  padding: clamp(var(--space-3), 2.5vw, var(--space-5));
+}
+
+.hud {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.title__mark {
+  color: var(--snake-body);
+}
+
+.stat {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.stat__label {
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.stat__value {
+  /* Tabular figures so the score cannot jitter as it counts up. */
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Board ------------------------------------------------------------------- */
+
+.board {
+  position: relative;
+  display: grid;
+  place-items: center;
+  /* Lets the 1fr row shrink below the canvas's intrinsic size. */
+  min-height: 0;
+  /* A viewport too small for the minimum cell size clips rather than scrolling
+     the page, which the acceptance criteria forbid at any width. */
+  overflow: hidden;
+}
+
+.board__canvas {
+  display: block;
+  border-radius: var(--radius-md);
+}
+
+/* Overlays ---------------------------------------------------------------- */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  text-align: center;
+  border-radius: var(--radius-md);
+  /* Opaque fallback first, so the scrim degrades rather than disappearing.
+     Heavy enough to veil the board rather than tint the text: the board and
+     the overlay copy are both centred, so the snake sits directly behind the
+     prompt in every overlay state and a lighter scrim let it show through as
+     a green patch on the text. */
+  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  /* Informational only — nothing inside is interactive, so clicks reach the
+     board rather than being swallowed by an invisible layer. */
+  pointer-events: none;
+  animation: overlay-in var(--duration-fast) var(--ease-out) both;
+}
+
+.overlay__title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.overlay__detail {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-dim);
+}
+
+kbd {
+  font: inherit;
+  padding: 0.1em 0.4em;
+  /* Opaque, so the chip keeps its shape whatever is behind it. Inheriting the
+     scrim made the same key look different depending on where the snake was. */
+  background: var(--arena);
+  border: 1px solid var(--frame);
+  border-radius: 4px;
+  color: var(--ink);
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* The hidden attribute must win over the display rules above. */
+[hidden] {
+  display: none !important;
+}
+
+/* The standing guard for the motion above and for anything added later. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

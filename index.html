@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>SNAKE // NEON CIRCUIT</title>
+    <meta
+      name="description"
+      content="A framework-free retro Snake game, built for polish."
+    />
+    <!-- Inline, so the browser never requests a /favicon.ico that does not exist. -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0d12'/%3E%3Crect x='7' y='13' width='7' height='7' fill='%237cffc4'/%3E%3Crect x='15' y='14' width='6' height='6' fill='%233ddc97'/%3E%3Crect x='23' y='15' width='4' height='4' fill='%233ddc97'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="css/main.css" />
+    <script type="module" src="src/main.js"></script>
+  </head>
+
+  <body>
+    <main class="shell">
+      <header class="hud">
+        <h1 class="title">SNAKE <span class="title__mark">//</span> NEON CIRCUIT</h1>
+        <p class="stat">
+          <span class="stat__label">Score</span>
+          <span class="stat__value" id="score">0</span>
+        </p>
+      </header>
+
+      <div class="board" id="board">
+        <!-- All meaningful state is DOM text; the canvas is decoration to a
+             screen reader and is hidden from it accordingly. -->
+        <canvas class="board__canvas" id="game-canvas" width="288" height="288" aria-hidden="true"></canvas>
+
+        <div class="overlay" id="overlay-ready">
+          <p class="overlay__title">Ready</p>
+          <p class="overlay__detail">Press <kbd>Enter</kbd> to start</p>
+        </div>
+
+        <div class="overlay" id="overlay-paused" aria-live="polite">
+          <p class="overlay__title">Paused</p>
+          <p class="overlay__detail">Press <kbd>P</kbd> or <kbd>Escape</kbd> to resume</p>
+        </div>
+
+        <div class="overlay" id="overlay-over" aria-live="polite">
+          <p class="overlay__title" id="over-title">Game over</p>
+          <p class="overlay__detail" id="over-detail">Score 0</p>
+          <p class="overlay__detail">Press <kbd>Enter</kbd> to play again</p>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>
