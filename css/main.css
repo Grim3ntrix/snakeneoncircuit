@@ -9,16 +9,22 @@
 :root {
   color-scheme: dark;
 
-  /* Palette */
+  /* Palette — the board as a printed circuit: substrate, trace, node.
+     Contrast is measured, not eyeballed; the figures live in
+     docs/tasks/002-neon-circuit-identity.md and must be recomputed if any
+     value here changes. The favicon in index.html copies three of these and
+     must be updated in the same change. */
   --bg: #0a0d12;
-  --arena: #11161f;
-  --grid: #1b2230;
+  --arena: #0e141b;
+  --grid: #171e29;
+  --grid-major: #26313f;
   --frame: #2a3446;
-  --snake-head: #7cffc4;
-  --snake-body: #3ddc97;
-  --food: #ff5c7a;
+  --edge-mark: #3d4d66;
+  --snake-head: #a8ffd8;
+  --snake-body: #2fe0a0;
+  --food: #ff4d70;
 
-  /* Text — both pass WCAG AA against --bg and against the overlay scrim */
+  /* Text — both pass WCAG AA against --bg and against the overlay panel */
   --ink: #e8eef7;
   --ink-dim: #93a1b5;
 
@@ -80,6 +86,18 @@ body {
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-4);
+  /* Matched to the board rather than to the shell, so the rule ends exactly
+     where the board does. The cell size is floored to a whole pixel, which
+     leaves up to 23px of slack shared either side of the canvas; without this
+     the rule overhangs the board by half of it. --board-px is published by the
+     renderer, which is the only thing that knows how big the board came out. */
+  width: var(--board-px, 100%);
+  max-width: 100%;
+  margin-inline: auto;
+  /* The silkscreen label area of the board: a rule that separates the chrome
+     from the field without competing with it. */
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--frame);
 }
 
 .title {
@@ -132,31 +150,55 @@ body {
 
 .board__canvas {
   display: block;
-  border-radius: var(--radius-md);
+  /* No border-radius, deliberately — do not add one back. A radius here clips at
+     composite time only, so the canvas bitmap keeps its square frame while the
+     stroke on screen stops ~6px short of each corner, leaving the corner to the
+     arena-versus-page contrast at 1.05:1. Square also matches the fiducials,
+     which are corner registration marks on a substrate with no rounded edges.
+     The rounded things in this design are the cards placed on the board. */
 }
 
 /* Overlays ---------------------------------------------------------------- */
 
 .overlay {
   position: absolute;
-  inset: 0;
+  /* Sized to the board, not to the container it sits in. The container is
+     taller than the board wherever the board is width-constrained, and the
+     scrim would then veil a band of page around the board — invisible only for
+     as long as the page background and the scrim happen to be the same colour.
+     Out of flow, so this cannot feed back into the size the renderer measures. */
+  inset: auto;
+  place-self: center;
+  width: var(--board-px, 100%);
+  height: var(--board-px, 100%);
   display: grid;
   place-content: center;
-  gap: var(--space-2);
   padding: var(--space-4);
-  text-align: center;
-  border-radius: var(--radius-md);
-  /* Opaque fallback first, so the scrim degrades rather than disappearing.
-     Heavy enough to veil the board rather than tint the text: the board and
-     the overlay copy are both centred, so the snake sits directly behind the
-     prompt in every overlay state and a lighter scrim let it show through as
-     a green patch on the text. */
+  /* No radius, and light rather than heavy. It has to match the board it veils:
+     a rounded scrim over a square board would leave the board's four corners
+     undimmed, showing as bright notches exactly where the fiducials are. And on
+     game over the player has just died and needs to see where the run ended,
+     which the 94% veil this replaces hid. The opaque fallback comes first, so an
+     unsupported color-mix degrades to a plain panel rather than to no scrim. */
   background: var(--bg);
-  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
   /* Informational only — nothing inside is interactive, so clicks reach the
      board rather than being swallowed by an invisible layer. */
   pointer-events: none;
   animation: overlay-in var(--duration-fast) var(--ease-out) both;
+}
+
+/* Opaque, and that is what makes a light scrim safe: no translucent layer ever
+   sits behind the type, so the board cannot tint it. Veiling the whole board at
+   94% was working around that symptom rather than fixing it. */
+.overlay__panel {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  text-align: center;
+  background: var(--arena);
+  border: 1px solid var(--frame);
+  border-radius: var(--radius-md);
 }
 
 .overlay__title {
@@ -177,9 +219,9 @@ body {
 kbd {
   font: inherit;
   padding: 0.1em 0.4em;
-  /* Opaque, so the chip keeps its shape whatever is behind it. Inheriting the
-     scrim made the same key look different depending on where the snake was. */
-  background: var(--arena);
+  /* Recessed against the opaque panel above it, so the chip reads as a key
+     rather than as a gap in the text. */
+  background: var(--bg);
   border: 1px solid var(--frame);
   border-radius: 4px;
   color: var(--ink);

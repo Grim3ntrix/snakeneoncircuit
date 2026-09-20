@@ -14,9 +14,11 @@ The guiding standard for this project is that functional does not mean finished.
 
 ## Status
 
-**Playable.** The core game is implemented and verified: start, eat, grow, die, and restart, all without a page reload.
+**Playable, and finished to a deliberate visual identity.** The core game is implemented and verified: start, eat, grow, die, and restart, all without a page reload.
 
-What exists is the core and its interface floor — not the finished presentation. The Neon Circuit visual identity, touch controls, audio, and score persistence are deliberately deferred to later work, and nothing here is stubbed or half-built in anticipation of them.
+The board is drawn as a printed circuit — substrate, a two-tier grid, corner fiducials. The snake is a single trace carrying a signal that attenuates from the head to the tail, which is both the identity and a gameplay aid: it tells you which way you are travelling without your having to find the head. Food is the only lit element on the board. The reasoning behind the palette and the form is in [the identity spec](docs/tasks/002-neon-circuit-identity.md).
+
+Touch controls, audio, and score persistence are deliberately deferred to later work, and nothing here is stubbed or half-built in anticipation of them.
 
 ## Play it locally
 
@@ -101,6 +103,8 @@ The modules are split by responsibility, and the boundaries hold rather than bei
 
 The game is deterministic: the same seed and the same input sequence reproduce the same run, exactly. The arena and grid are drawn once into an offscreen canvas and reused, so the per-frame path allocates nothing.
 
+The palette is declared once, in `css/main.css`, and read into the renderer at startup, so the canvas and the interface chrome cannot drift apart. Contrast is measured rather than eyeballed, and where two board elements sit close in luminance — the head against the body, the food against the body — shape and size carry the distinction, so the game stays readable without colour.
+
 ## Tech
 
 - HTML, CSS, and JavaScript (ES modules)
@@ -124,7 +128,7 @@ Indicative, not a specification.
 - [x] Core gameplay: fixed-timestep simulation, deterministic movement, exact collision
 - [x] Accessibility floor: keyboard operation, WCAG AA contrast, reduced motion
 - [x] Responsive layout from 320px to large desktop, sharp at any device pixel ratio
-- [ ] Visual identity and interface
+- [x] Visual identity and interface
 - [ ] Touch controls
 - [ ] Score persistence and statistics
 - [ ] Audio and richer feedback

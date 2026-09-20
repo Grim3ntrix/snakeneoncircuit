@@ -73,3 +73,26 @@ export const MIN_CELL_PX = 8;
 // shape as well as colour — colour alone would fail colour-blind players.
 export const BODY_INSET_PX = 2;
 export const FOOD_INSET_PX = 3;
+
+// Major grid lines every 6 cells. 24 divides by 6 into four, so the board reads
+// as a 4x4 arrangement of blocks rather than an unmarked field — which gives
+// the player a spatial reference and stops the lattice reading as graph paper.
+export const MAJOR_GRID_EVERY = 6;
+
+// Corner fiducials, as a multiple of the cell so they scale with the board
+// instead of vanishing on a small screen.
+export const FIDUCIAL_ARM_CELLS = 1.5;
+export const FIDUCIAL_INSET_PX = 5;
+
+// The trace attenuates from the head to the tail. This floor is a legibility
+// limit, not a taste call: composited over the substrate, --snake-body reaches
+// 3:1 at alpha 0.45 and falls to 2.70:1 at 0.40. Under 3:1 the tail stops
+// being a readable graphical object (WCAG 1.4.11) — and the tail is the cell
+// the whole tail-vacate rule turns on, so the player has to see it.
+export const TRACE_TAIL_ALPHA = 0.5;
+
+// The food is the only lit element on the board. The halo is a second filled
+// path, not a shadow: ctx.shadowBlur allocates a blur surface per draw call
+// and cannot be cached.
+export const FOOD_HALO_ALPHA = 0.22;
+export const FOOD_HALO_SPREAD_RATIO = 0.2;
