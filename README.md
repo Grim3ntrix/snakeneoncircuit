@@ -18,7 +18,9 @@ The guiding standard for this project is that functional does not mean finished.
 
 The board is drawn as a printed circuit — substrate, a two-tier grid, corner fiducials. The snake is a single trace carrying a signal that attenuates from the head to the tail, which is both the identity and a gameplay aid: it tells you which way you are travelling without your having to find the head. Food is the only lit element on the board. The reasoning behind the palette and the form is in [the identity spec](docs/tasks/002-neon-circuit-identity.md).
 
-Touch controls, audio, and score persistence are deliberately deferred to later work, and nothing here is stubbed or half-built in anticipation of them.
+It is playable on a phone with no keyboard at all. A four-way pad and a pause control appear whenever the device's primary pointer is coarse, and the overlay copy swaps with them — naming the pad rather than a key the device does not have. Nothing is detected at runtime and there is nothing to configure: the capability question is one CSS already answers, so the controls are shown by `@media (pointer: coarse)` and by nothing else.
+
+Audio and score persistence are deliberately deferred to later work, and nothing here is stubbed or half-built in anticipation of them.
 
 ## Play it locally
 
@@ -54,14 +56,14 @@ Run the command from the repository root, then stop it with `Ctrl+C` when you ar
 
 Eat the food. Do not hit a wall or yourself.
 
-| Action | Keys |
-| --- | --- |
-| Move | <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> or <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> |
-| Start | <kbd>Enter</kbd>, <kbd>Space</kbd>, or any direction key |
-| Pause / resume | <kbd>P</kbd> or <kbd>Escape</kbd> |
-| Play again | <kbd>Enter</kbd>, <kbd>Space</kbd>, or any direction key |
+| Action | Keys | Touch |
+| --- | --- | --- |
+| Move | <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> or <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | The direction pad |
+| Start | <kbd>Enter</kbd>, <kbd>Space</kbd>, or any direction key | Tap any direction on the pad |
+| Pause / resume | <kbd>P</kbd> or <kbd>Escape</kbd> | Tap **Pause** |
+| Play again | <kbd>Enter</kbd>, <kbd>Space</kbd>, or any direction key | Tap any direction on the pad |
 
-Pressing a direction key to start also steers — press <kbd>↑</kbd> on the start screen and the snake sets off upward.
+Pressing a direction key to start also steers — press <kbd>↑</kbd> on the start screen and the snake sets off upward. The pad behaves identically: it sits below the board in portrait and beside it in landscape, and tapping a direction starts the game in that direction.
 
 ### The rules, exactly
 
@@ -83,7 +85,7 @@ src/config.js       Every tunable value, defined once
 src/rng.js          Seeded random number generator
 src/state.js        Phases and the initial game state
 src/simulation.js   Game rules — no DOM, no canvas, no timers
-src/input.js        Keyboard handling
+src/input.js        Keyboard and touch input
 src/renderer.js     Canvas sizing, DPR, drawing
 src/main.js         Bootstrap and the frame loop
 CLAUDE.md           Engineering, UX, and polish standards for this repo
@@ -98,7 +100,7 @@ The modules are split by responsibility, and the boundaries hold rather than bei
 
 - **`simulation.js`** holds the rules and nothing else. It contains no DOM, canvas, or timing reference at all, so the same module runs headlessly under Node as well as in the browser — which is how the collision rules can be exercised exhaustively, without a browser in the loop.
 - **`main.js`** owns a fixed-timestep accumulator over `requestAnimationFrame`. Gameplay advances in exact 120 ms steps regardless of frame rate, with a delta clamp so a stall or a resumed tab cannot discharge a burst of ticks and drive the snake into a wall.
-- **`input.js`** is the only place that listens for keys. It translates a key into an intent and hands it on; whether a turn is *legal* is decided against the simulation's queue, not here.
+- **`input.js`** is the only place that listens for input, from any device. A keypress and a tap on the pad become the same intent by the same path, so touch cannot quietly lose a guarantee the keyboard has; whether a turn is *legal* is decided against the simulation's queue, not here.
 - **`renderer.js`** knows the board is 24 cells square and nothing else about the game. It never reads the score or the phase. Replacing it wholesale is the intended way to redesign the visuals.
 
 The game is deterministic: the same seed and the same input sequence reproduce the same run, exactly. The arena and grid are drawn once into an offscreen canvas and reused, so the per-frame path allocates nothing.
@@ -111,7 +113,7 @@ The palette is declared once, in `css/main.css`, and read into the renderer at s
 - Canvas 2D for rendering
 - No frameworks, no bundler, no build step, no dependencies
 
-Browser-native capability is preferred over adding a library. Dependencies are treated as a cost that has to be justified. Any current evergreen browser works — the game uses ES modules, Canvas 2D, `ResizeObserver`, and CSS custom properties.
+Browser-native capability is preferred over adding a library. Dependencies are treated as a cost that has to be justified. Any current evergreen browser works — the game uses ES modules, Canvas 2D, `ResizeObserver`, CSS custom properties, and `env()` safe-area insets.
 
 The canvas is sized to whole device pixels and matches the display's device pixel ratio, so the board stays sharp at 1×, 2×, and 3× rather than being resampled.
 
@@ -126,10 +128,10 @@ The short version: keep it vanilla, keep it simple, separate simulation from ren
 Indicative, not a specification.
 
 - [x] Core gameplay: fixed-timestep simulation, deterministic movement, exact collision
-- [x] Accessibility floor: keyboard operation, WCAG AA contrast, reduced motion
+- [x] Accessibility floor: keyboard operation, WCAG AA contrast, reduced motion, 44px touch targets
 - [x] Responsive layout from 320px to large desktop, sharp at any device pixel ratio
 - [x] Visual identity and interface
-- [ ] Touch controls
+- [x] Touch controls: a four-way pad and a pause control, gated by pointer capability
 - [ ] Score persistence and statistics
 - [ ] Audio and richer feedback
 
