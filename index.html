@@ -37,14 +37,19 @@
         <div class="overlay" id="overlay-ready">
           <div class="overlay__panel">
             <p class="overlay__title">Ready</p>
-            <p class="overlay__detail">Press <kbd>Enter</kbd> to start</p>
+            <!-- One instruction per input device, and CSS picks. A keycap is an
+                 instruction to press a key that does not exist on the device
+                 showing it, so the whole line is replaced rather than reworded. -->
+            <p class="overlay__detail overlay__detail--keys">Press <kbd>Enter</kbd> to start</p>
+            <p class="overlay__detail overlay__detail--touch">Tap the pad to start</p>
           </div>
         </div>
 
         <div class="overlay" id="overlay-paused" aria-live="polite">
           <div class="overlay__panel">
             <p class="overlay__title">Paused</p>
-            <p class="overlay__detail">Press <kbd>P</kbd> or <kbd>Escape</kbd> to resume</p>
+            <p class="overlay__detail overlay__detail--keys">Press <kbd>P</kbd> or <kbd>Escape</kbd> to resume</p>
+            <p class="overlay__detail overlay__detail--touch">Tap Pause to resume</p>
           </div>
         </div>
 
@@ -52,9 +57,35 @@
           <div class="overlay__panel">
             <p class="overlay__title" id="over-title">Game over</p>
             <p class="overlay__detail" id="over-detail">Score 0</p>
-            <p class="overlay__detail">Press <kbd>Enter</kbd> to play again</p>
+            <p class="overlay__detail overlay__detail--keys">Press <kbd>Enter</kbd> to play again</p>
+            <p class="overlay__detail overlay__detail--touch">Tap the pad to play again</p>
           </div>
         </div>
+      </div>
+
+      <!-- Touch controls. Sized and placed by CSS, which is also where the
+           `pointer: coarse` decision lives — nothing here is detected at runtime.
+           A sibling of .board, never a child: .board is the element the renderer
+           measures, and putting controls inside it would let them shrink the
+           board they are meant to serve.
+
+           The pause control sits with the pad rather than in the HUD row. It was
+           specified for the HUD, but measured: a 44px control in the 40px HUD row
+           grows that row by 17px, which at 480x720 leaves the board 3px of slack
+           and at 844x390 drops the cell size from 12 to 11. The board does not get
+           smaller to make room for a button. -->
+      <div class="controls">
+        <div class="pad" id="pad" role="group" aria-label="Direction">
+          <!-- tabindex="-1": these are for a finger. The arrow keys already reach
+               the same four intents, so nothing is lost from the tab order, and a
+               focused direction button is a button that can be activated by the
+               same Enter key that starts a game. -->
+          <button type="button" class="pad__key pad__key--up" data-direction="up" tabindex="-1" aria-label="Up"><span class="pad__chevron"></span></button>
+          <button type="button" class="pad__key pad__key--left" data-direction="left" tabindex="-1" aria-label="Left"><span class="pad__chevron"></span></button>
+          <button type="button" class="pad__key pad__key--right" data-direction="right" tabindex="-1" aria-label="Right"><span class="pad__chevron"></span></button>
+          <button type="button" class="pad__key pad__key--down" data-direction="down" tabindex="-1" aria-label="Down"><span class="pad__chevron"></span></button>
+        </div>
+        <button type="button" class="pause" id="pause">Pause</button>
       </div>
     </main>
   </body>

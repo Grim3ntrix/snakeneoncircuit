@@ -46,6 +46,31 @@
 
   --radius-md: 10px;
 
+  /* Touch targets. 44px is the accessibility floor, not a preference: the pad's
+     whole footprint — 3 x 44 + 2 x 8 = 148px — follows from it, and so does the
+     arithmetic that keeps the board from shrinking to make room. */
+  --touch-target: 44px;
+
+  /* The pad's footprint: three keys and the two gaps between them. Named because
+     the board's maximum width in landscape has to leave room for it, and a
+     formula that copies 148px is a formula that can drift from the pad. */
+  --pad-footprint: calc(3 * var(--touch-target) + 2 * var(--space-2));
+
+  /* The shell's own gutter, named so the same landscape cap can subtract exactly
+     what the shell took instead of a second copy of this clamp. */
+  --shell-pad: clamp(var(--space-3), 2.5vw, var(--space-5));
+
+  /* index.html opts into viewport-fit=cover, which is permission to draw under
+     the notch and the home indicator. These are what make that permission safe:
+     zero on every device without insets, so nothing about the layout moves
+     there, and on a phone the board and the pad clear the hardware instead of
+     sitting beneath it. Without them the pad is exactly where a thumb rests and
+     exactly where a home indicator is drawn. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
   --tracking-wide: 0.14em;
 
   --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", "Segoe UI Mono", Menlo,
@@ -78,7 +103,11 @@ body {
   height: 100dvh;
   max-width: 46rem;
   margin-inline: auto;
-  padding: clamp(var(--space-3), 2.5vw, var(--space-5));
+  padding:
+    calc(var(--shell-pad) + var(--safe-top))
+    calc(var(--shell-pad) + var(--safe-right))
+    calc(var(--shell-pad) + var(--safe-bottom))
+    calc(var(--shell-pad) + var(--safe-left));
 }
 
 .hud {
@@ -216,6 +245,12 @@ body {
   color: var(--ink-dim);
 }
 
+/* One instruction per input device. Which one shows is decided in the touch
+   section below, alongside every other `pointer: coarse` rule. */
+.overlay__detail--touch {
+  display: none;
+}
+
 kbd {
   font: inherit;
   padding: 0.1em 0.4em;
@@ -239,6 +274,241 @@ kbd {
 /* The hidden attribute must win over the display rules above. */
 [hidden] {
   display: none !important;
+}
+
+/* Touch controls ---------------------------------------------------------- */
+
+/* Hidden by default, then shown by capability. `pointer: coarse` is a question
+   CSS can already answer, so nothing here is detected at runtime and nothing is
+   stored as a preference. */
+.controls {
+  display: none;
+}
+
+.pad {
+  display: grid;
+  grid-template-columns: repeat(3, var(--touch-target));
+  grid-template-rows: repeat(3, var(--touch-target));
+  gap: var(--space-2);
+  /* Stated rather than left to the tracks, so the token the board's landscape
+     cap subtracts is the same number the pad actually occupies. */
+  width: var(--pad-footprint);
+  height: var(--pad-footprint);
+}
+
+.pad__key {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  padding: 0;
+  background: var(--arena);
+  border: 1px solid var(--frame);
+  border-radius: var(--radius-md);
+  color: var(--ink-dim);
+  cursor: pointer;
+  /* The gesture belongs to the game, not to the page: without this a press can
+     be reinterpreted as a scroll or a double-tap zoom partway through. Applied to
+     the controls rather than to the page, so everything the game is not still
+     scrolls normally. */
+  touch-action: none;
+  /* A long press otherwise selects the label or raises the callout, and the tap
+     highlight would paint over the :active state below. */
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+/* The visual target is the 44px minimum with an 8px gap to its neighbour, so a
+   thumb landing between two keys would otherwise do nothing — and during fast
+   play that is a lost input, not a miss. This grows only the hit rect, by half
+   the gap on each side, so neighbouring rects meet exactly: no dead zone, no
+   overlap, and nothing drawn differently. */
+.pad__key::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--space-2) * -0.5);
+}
+
+/* pointerdown is the intent, so the pressed state is the only feedback there is
+   and it has to be immediate. */
+.pad__key:active {
+  color: var(--snake-body);
+  border-color: var(--snake-body);
+  background: var(--bg);
+}
+
+/* One chevron, rotated. Two borders rather than an SVG: it is the same 2px
+   stroke as the frame and the fiducials, so it needs no icon set to stay in
+   register with them. */
+.pad__chevron {
+  width: 10px;
+  height: 10px;
+  border-top: 2px solid currentColor;
+  border-left: 2px solid currentColor;
+  transform: rotate(var(--chevron-rotation));
+}
+
+.pad__key--up {
+  --chevron-rotation: 45deg;
+  grid-area: 1 / 2;
+}
+
+.pad__key--left {
+  --chevron-rotation: -45deg;
+  grid-area: 2 / 1;
+}
+
+.pad__key--right {
+  --chevron-rotation: 135deg;
+  grid-area: 2 / 3;
+}
+
+.pad__key--down {
+  --chevron-rotation: 225deg;
+  grid-area: 3 / 2;
+}
+
+/* A word rather than a pause glyph: "Pause" is what the paused overlay tells the
+   player to tap, and it means the same thing to a screen reader, a sighted
+   player, and the copy — with no icon font and no symbol that might not render. */
+.pause {
+  display: grid;
+  place-items: center;
+  min-width: var(--touch-target);
+  height: var(--touch-target);
+  padding-inline: var(--space-4);
+  background: var(--arena);
+  border: 1px solid var(--frame);
+  border-radius: var(--radius-md);
+  color: var(--ink-dim);
+  font: inherit;
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+.pause:active {
+  color: var(--snake-body);
+  border-color: var(--snake-body);
+  background: var(--bg);
+}
+
+/* The only focusable thing in the game — everything else is reached through the
+   window's keydown listener — so this is the only place a focus ring is ever
+   drawn, and the browser's stock outline is the only part of this interface that
+   was not designed. Same 2px stroke as the chevrons and the board's fiducials,
+   in the one accent reserved for "live". */
+.pause:focus-visible {
+  outline: 2px solid var(--snake-body);
+  outline-offset: 2px;
+}
+
+/* Hover, but only where hovering is a thing that exists. On a touch screen the
+   browser applies :hover to whatever was last tapped and leaves it there, so an
+   unguarded rule would strand a key in its hover state — looking permanently
+   lit — until the player happened to tap something else. A hybrid device with
+   both a coarse pointer and a mouse still gets the real hover state. */
+@media (pointer: coarse) and (hover: hover) {
+  .pad__key:hover,
+  .pause:hover {
+    color: var(--ink);
+    border-color: var(--edge-mark);
+  }
+}
+
+/* Where the pointer is a finger. .shell gains its third row only here: a grid
+   row with nothing in it still contributes its gap, so declaring it in the base
+   layout would take 16px off the board row on every desktop. */
+@media (pointer: coarse) {
+  .shell {
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+  }
+
+  .overlay__detail--keys {
+    display: none;
+  }
+
+  .overlay__detail--touch {
+    display: block;
+  }
+}
+
+/* Landscape puts the pad beside the board rather than below it. Not a taste
+   call: at 844x390 the board row is 292px for a 288px board, so taking the pad's
+   148px out of it clamps the cell size to the minimum and the board becomes a
+   postage stamp. Beside, the board keeps its full height and spends width it has
+   to spare. Applied to all landscape rather than only short landscape, because
+   height is the binding constraint in landscape generally — beside is never the
+   worse answer. */
+@media (pointer: coarse) and (orientation: landscape) {
+  .shell {
+    grid-template-rows: auto 1fr;
+    grid-template-columns: auto auto;
+    justify-content: center;
+  }
+
+  /* Square, and sized from the row rather than from its own contents. That is
+     what lets the column be `auto` at all: a board whose width came from its
+     canvas would be circular, because the renderer sizes the canvas from the
+     board it is inside. Left to its contents the column would pin itself to the
+     canvas's intrinsic width and could never grow to fill a taller viewport.
+
+     Deriving the width from the height instead puts the board and the pad the
+     shell's gap apart, rather than leaving the board centred in a column with
+     slack on both sides — which at 844x390 left 137px of nothing between them,
+     wider than the pad itself. */
+  .board {
+    grid-row: 2;
+    grid-column: 1;
+    height: 100%;
+    aspect-ratio: 1;
+    /* Bounded by width as well as by height. A row taller than the space left
+       beside the pad would make a board wider than its column, and a centred
+       track that overflows overflows both ways — pushing half the board off the
+       left edge, where no amount of scrolling reaches it. Only bites on a
+       landscape viewport barely wider than it is tall; on every real one the
+       height is the binding constraint, as it should be. */
+    max-height: calc(
+      100vw - 2 * var(--shell-pad) - var(--safe-left) - var(--safe-right)
+        - var(--pad-footprint) - var(--space-4)
+    );
+  }
+
+  .controls {
+    grid-row: 2;
+    grid-column: 2;
+    flex-direction: column;
+  }
+
+  /* The header spans both columns rather than matching the board. Matched to the
+     board it is as narrow as the board, and beside the pad the board is narrower
+     than it was — at 568x320 that is 216px for a wordmark and a score that need
+     231, so the title wrapped mid-name. A header over a two-column body reads as
+     a header; a header the width of the left column reads as a mistake. */
+  .hud {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
 }
 
 /* The standing guard for the motion above and for anything added later. */
