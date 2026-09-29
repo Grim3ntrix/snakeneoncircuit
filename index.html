@@ -42,6 +42,12 @@
                  showing it, so the whole line is replaced rather than reworded. -->
             <p class="overlay__detail overlay__detail--keys">Press <kbd>Enter</kbd> to start</p>
             <p class="overlay__detail overlay__detail--touch">Tap the pad to start</p>
+            <!-- Filled and unhidden by main.js, and only once a game has been
+                 finished. Left empty and `hidden` here so a first visit — which
+                 has no record to show — is exactly the screen it was before this
+                 feature existed. It is not device-specific: the same figure reads
+                 the same way on a phone and a desktop. -->
+            <p class="overlay__meta" id="record" hidden></p>
           </div>
         </div>
 
@@ -57,6 +63,9 @@
           <div class="overlay__panel">
             <p class="overlay__title" id="over-title">Game over</p>
             <p class="overlay__detail" id="over-detail">Score 0</p>
+            <!-- How many runs this session has ended, filled by main.js. Not a
+                 record and not stored: reloading puts it back to one. -->
+            <p class="overlay__meta" id="over-attempts">Attempts 0</p>
             <p class="overlay__detail overlay__detail--keys">Press <kbd>Enter</kbd> to play again</p>
             <p class="overlay__detail overlay__detail--touch">Tap the pad to play again</p>
           </div>

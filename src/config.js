@@ -96,3 +96,13 @@ export const TRACE_TAIL_ALPHA = 0.5;
 // and cannot be cached.
 export const FOOD_HALO_ALPHA = 0.22;
 export const FOOD_HALO_SPREAD_RATIO = 0.2;
+
+// Not a tunable, but this module is the single source of truth for constants
+// and a storage key inlined at its call site is one that can drift from the
+// reader of it.
+//
+// The version is part of the key rather than a field in the value. A future
+// schema is then a different key, so the record written today can never be
+// read back as though it had the newer shape — which is the entire failure
+// mode versioning exists to prevent, for the price of a suffix.
+export const STATS_KEY = 'snakeneoncircuit.stats.v1';

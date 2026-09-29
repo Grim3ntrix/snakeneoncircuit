@@ -251,6 +251,69 @@ body {
   display: none;
 }
 
+/* A supplementary line under the one that matters: a step down in size and
+   dimmer than the detail above it, so the ready screen still reads as "press
+   Enter" first and "here is what you are chasing" second, and the game-over
+   screen as the score first and the attempt count second.
+
+   One class for both, because they are the same thing — a quiet figure line
+   that supports the line above it. The record is absent until a game has been
+   finished, so nothing here has to describe an empty state. */
+.overlay__meta {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--ink-dim);
+}
+
+/* Figures carry the HUD's own class wherever one is shown, so a figure is one
+   thing across the whole interface rather than being restyled per screen: the
+   weight, the colour, and the tabular figures that stop a record jittering as it
+   counts from 9 to 10 are all the HUD's, and that is the whole of the emphasis.
+
+   Inherited rather than restated, so a figure is the size of the line it sits on
+   and neither line has to name a size. Monospace is what makes weight free: a
+   heavier glyph is the same width as a light one, so the emphasis costs nothing
+   at all. */
+.overlay__meta .stat__value,
+.overlay__detail .stat__value {
+  font-size: inherit;
+}
+
+/* The mark that says the run you just finished beat your record.
+
+   A new best is the one thing the game-over screen is allowed to celebrate, and
+   celebrating it with the same separator that introduces a record you failed to
+   beat says the opposite. So it gets a star, in the accent reserved for "live" —
+   the two readings are told apart by shape, not by a word and not by colour.
+
+   The glyph is generated content on an element that carries no text of its own,
+   and the element is `aria-hidden` besides: decoration is not something to read
+   aloud, and the sentence a screen reader is handed stays "Score 42 New best".
+
+   `inline-block` because a transform does nothing to an inline box, and the
+   animation is the overlay's own duration and easing — one arrival, not two. */
+.result__mark {
+  display: inline-block;
+  margin-inline: 0 0.4em;
+  color: var(--snake-body);
+  animation: mark-in var(--duration-fast) var(--ease-out) both;
+}
+
+.result__mark::before {
+  content: "✦";
+}
+
+@keyframes mark-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 kbd {
   font: inherit;
   padding: 0.1em 0.4em;

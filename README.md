@@ -20,7 +20,11 @@ The board is drawn as a printed circuit — substrate, a two-tier grid, corner f
 
 It is playable on a phone with no keyboard at all. A four-way pad and a pause control appear whenever the device's primary pointer is coarse, and the overlay copy swaps with them — naming the pad rather than a key the device does not have. Nothing is detected at runtime and there is nothing to configure: the capability question is one CSS already answers, so the controls are shown by `@media (pointer: coarse)` and by nothing else.
 
-Audio and score persistence are deliberately deferred to later work, and nothing here is stubbed or half-built in anticipation of them.
+Your best score is kept on the device and reported on the start screen, so there is something to beat the moment you arrive — and the game-over screen tells you how the run you just finished stands against it. The record lives under a single versioned `localStorage` key and is validated in full on read: a key that is absent, unreadable, or written by some future version reads as a first visit rather than as a partly-correct screen, and the game plays identically whether or not storage works at all.
+
+The game-over screen also counts your attempts. Those deliberately are not part of the record: they count the session you are in, so closing the tab loses them and the next session starts again at one.
+
+Audio is deliberately deferred to later work, and nothing here is stubbed or half-built in anticipation of it.
 
 ## Play it locally
 
@@ -75,6 +79,7 @@ Pressing a direction key to start also steers — press <kbd>↑</kbd> on the st
 - Filling the entire board ends the game as a **win**, not a crash.
 - Pausing freezes the snake exactly where it is, between ticks. Resuming continues from the same cell with no half-applied move, and turns queued before the pause still apply afterwards.
 - Switching tabs auto-pauses. You never come back to a snake that moved — or died — while you were away.
+- Your best score is stored in this browser. Nothing is sent anywhere and there is no account, so clearing site data clears the record with it. Your attempt count is not stored at all — it counts the session you are in and resets when you close the tab.
 
 ## Project structure
 
@@ -87,6 +92,7 @@ src/state.js        Phases and the initial game state
 src/simulation.js   Game rules — no DOM, no canvas, no timers
 src/input.js        Keyboard and touch input
 src/renderer.js     Canvas sizing, DPR, drawing
+src/storage.js      The saved record — read, validated, written
 src/main.js         Bootstrap and the frame loop
 CLAUDE.md           Engineering, UX, and polish standards for this repo
 .claude/            Claude Code workflows (refinement pass skill + /polish command)
@@ -102,6 +108,7 @@ The modules are split by responsibility, and the boundaries hold rather than bei
 - **`main.js`** owns a fixed-timestep accumulator over `requestAnimationFrame`. Gameplay advances in exact 120 ms steps regardless of frame rate, with a delta clamp so a stall or a resumed tab cannot discharge a burst of ticks and drive the snake into a wall.
 - **`input.js`** is the only place that listens for input, from any device. A keypress and a tap on the pad become the same intent by the same path, so touch cannot quietly lose a guarantee the keyboard has; whether a turn is *legal* is decided against the simulation's queue, not here.
 - **`renderer.js`** knows the board is 24 cells square and nothing else about the game. It never reads the score or the phase. Replacing it wholesale is the intended way to redesign the visuals.
+- **`storage.js`** is the only module that touches `localStorage`, and it guards every access to it — including the property read itself, because Safari's private mode throws on `window.localStorage` rather than on its methods. The record is read once at startup and replaced wholesale thereafter, and a record that fails validation is discarded whole for the defaults rather than salvaged field by field, so a half-readable record can never become a half-correct screen.
 
 The game is deterministic: the same seed and the same input sequence reproduce the same run, exactly. The arena and grid are drawn once into an offscreen canvas and reused, so the per-frame path allocates nothing.
 
@@ -113,7 +120,7 @@ The palette is declared once, in `css/main.css`, and read into the renderer at s
 - Canvas 2D for rendering
 - No frameworks, no bundler, no build step, no dependencies
 
-Browser-native capability is preferred over adding a library. Dependencies are treated as a cost that has to be justified. Any current evergreen browser works — the game uses ES modules, Canvas 2D, `ResizeObserver`, CSS custom properties, and `env()` safe-area insets.
+Browser-native capability is preferred over adding a library. Dependencies are treated as a cost that has to be justified. Any current evergreen browser works — the game uses ES modules, Canvas 2D, `ResizeObserver`, `localStorage`, CSS custom properties, and `env()` safe-area insets.
 
 The canvas is sized to whole device pixels and matches the display's device pixel ratio, so the board stays sharp at 1×, 2×, and 3× rather than being resampled.
 
@@ -132,7 +139,7 @@ Indicative, not a specification.
 - [x] Responsive layout from 320px to large desktop, sharp at any device pixel ratio
 - [x] Visual identity and interface
 - [x] Touch controls: a four-way pad and a pause control, gated by pointer capability
-- [ ] Score persistence and statistics
+- [x] Score persistence: your best score, kept on the device
 - [ ] Audio and richer feedback
 
 ## License
