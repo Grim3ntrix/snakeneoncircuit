@@ -61,6 +61,11 @@ export const PAUSE_KEYS = new Set(['p', 'P', 'Escape']);
 // Enter and Space both begin a game. event.key for Space is a single space.
 export const START_KEYS = new Set(['Enter', ' ']);
 
+// The sound toggle. Deliberately not folded into PAUSE_KEYS even though both are
+// "the keys that are not directions": the one place that reads either has to say
+// which it means, and a set that quietly answers two questions cannot.
+export const MUTE_KEYS = new Set(['m', 'M']);
+
 // Arrow keys scroll the page and Space scrolls or activates, so all five are
 // suppressed. WASD has no default behaviour worth preventing.
 export const PREVENT_DEFAULT_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ']);
@@ -97,6 +102,27 @@ export const TRACE_TAIL_ALPHA = 0.5;
 export const FOOD_HALO_ALPHA = 0.22;
 export const FOOD_HALO_SPREAD_RATIO = 0.2;
 
+// How much further that halo reaches by the end of an eat flare, as a ratio of the
+// cell. Larger than the halo's own spread, because the halo is only ever seen at
+// rest while this one is followed from the moment it starts, and an expansion the
+// eye cannot see is not an effect. Smaller than a cell, because the flare is drawn
+// under the food the player has to find next: past about half a cell it stops
+// being the node's light leaving and becomes a second thing on the board.
+export const FOOD_FLARE_SPREAD_RATIO = 0.5;
+
+// How long each board effect takes to play out. Timings, so they belong beside
+// TICK_MS rather than next to the drawing they drive — and `eat` is read against
+// TICK_MS to size the timeline, which is a relationship only visible from here.
+//
+// `death` is long enough to be watched and shorter than the overlay's arrival, so
+// the board settles while the panel is still coming in. `win` is longer because
+// the trace it travels is the whole board.
+export const EFFECT_MS = Object.freeze({
+  eat: 260,
+  death: 420,
+  win: 640,
+});
+
 // Not a tunable, but this module is the single source of truth for constants
 // and a storage key inlined at its call site is one that can drift from the
 // reader of it.
@@ -106,3 +132,10 @@ export const FOOD_HALO_SPREAD_RATIO = 0.2;
 // read back as though it had the newer shape — which is the entire failure
 // mode versioning exists to prevent, for the price of a suffix.
 export const STATS_KEY = 'snakeneoncircuit.stats.v1';
+
+// A second key rather than a third field in the one above. The record and the
+// sound preference are unrelated, and keeping them in one object would mean a
+// corrupt score silently taking the sound setting down with it — which is exactly
+// what all-or-nothing validation is supposed to prevent, not cause. Separate keys
+// also version separately, so neither schema can be read back as the other's.
+export const SETTINGS_KEY = 'snakeneoncircuit.settings.v1';

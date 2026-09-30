@@ -10,19 +10,26 @@ import {
   TRACE_TAIL_ALPHA,
   FOOD_HALO_ALPHA,
   FOOD_HALO_SPREAD_RATIO,
+  FOOD_FLARE_SPREAD_RATIO,
 } from './config.js';
+import { EFFECT } from './effects.js';
 
 /**
  * Everything that turns grid cells into pixels.
  *
  * This module knows the board is 24 cells square and nothing else about the
- * game: it never reads `phase`, `score`, or `over`. Replacing it wholesale is
- * the intended way to redesign the visuals.
+ * game: it never reads `phase`, `score`, or `over`, and it cannot ask what
+ * happened. It can only be *told*, through the event timeline it is handed, which
+ * is what keeps it replaceable wholesale as a visual redesign.
  *
  * The board is drawn as a printed circuit — substrate, a two-tier grid, corner
  * fiducials — and the snake as a single trace carrying a signal that attenuates
  * toward the tail. Food is the only lit element. The identity is in the form,
  * not the palette; see docs/tasks/002-neon-circuit-identity.md.
+ *
+ * Event feedback is the one thing here that involves time, and it arrives already
+ * aged: the timeline is advanced by the caller, and this module only reads how far
+ * through each effect is. See docs/decisions/001-render-events.md.
  */
 
 // camelCase key -> the CSS custom property that owns the value.
@@ -137,15 +144,62 @@ function paintArena(cacheCtx, view) {
   cacheCtx.strokeRect(1, 1, boardPx - 2, boardPx - 2);
 }
 
+// How far the event's wavefront is softened as it travels, in cells. A step
+// across a single cell moves a whole cell per tick and reads as dropped frames;
+// this reads as a front passing.
+const WAVE_EDGE_CELLS = 1.5;
+
+// How much of the trace a win's travelling band covers, in cells — and how far
+// past the tail both wavefronts run, so each has left the trace before its effect
+// is over. The overshoot is what makes the last animated frame identical to the
+// settled one: without it the trace would visibly snap on the final tick.
+const WAVE_BAND_CELLS = 4;
+
 /**
- * Signal attenuation along the trace: full brightness at the neck, fading to
- * `TRACE_TAIL_ALPHA` at the tail. Beyond looking right, this tells the player
+ * Signal attenuation along the trace at rest: full brightness at the neck, fading
+ * to `TRACE_TAIL_ALPHA` at the tail. Beyond looking right, this tells the player
  * which way they are travelling without having to find the head.
  */
 function traceAlpha(index, length) {
   if (length <= 2) return 1;
   const along = (index - 1) / (length - 2);
   return 1 - (1 - TRACE_TAIL_ALPHA) * along;
+}
+
+/**
+ * The body's brightness with the run's outcome travelling down it.
+ *
+ * One mechanic, two readings, and the difference between them is which side of the
+ * front is changed. A death leaves `TRACE_TAIL_ALPHA` behind its front — the signal
+ * is out, and it stays out. A win carries a band of full brightness and leaves the
+ * ramp exactly as it found it — the signal made it all the way round and the
+ * conductor is unchanged.
+ *
+ * The floor on a death is `TRACE_TAIL_ALPHA` and nothing lower, because that is the
+ * constant's own reason for existing: 0.5 is where the body still clears 3:1 against
+ * the substrate. The trace goes out exactly as far as it can be watched going out.
+ *
+ * `wave` is the live outcome slot, passed by reference so this allocates nothing.
+ * With no wave, this returns the resting ramp and an ordinary frame computes what it
+ * computed before this existed.
+ */
+function waveAlpha(index, length, wave) {
+  const resting = traceAlpha(index, length);
+  if (wave === null) return resting;
+
+  // Walks the whole body over the effect's life, and past the end of it.
+  const front = wave.t * (length - 1 + WAVE_BAND_CELLS);
+
+  if (wave.kind === EFFECT.DEATH) {
+    const passed = Math.min(1, Math.max(0, (front - index) / WAVE_EDGE_CELLS));
+    return resting + (TRACE_TAIL_ALPHA - resting) * passed;
+  }
+
+  // A win. The band is added to whatever the ramp already is there, so it is
+  // brightest in the middle of the body rather than merely equal along the band.
+  const fromFront = Math.abs(index - front);
+  if (fromFront >= WAVE_BAND_CELLS) return resting;
+  return resting + (1 - resting) * (1 - fromFront / WAVE_BAND_CELLS);
 }
 
 /**
@@ -156,8 +210,12 @@ function traceAlpha(index, length) {
  * is composited twice — at alpha below 1 an overlap would show as a seam — and
  * because every segment owns exactly one bridge, the bridges tile the gaps
  * without overlapping each other either.
+ *
+ * That no-overlap rule is what makes per-segment alpha possible at all, and it is
+ * what lets the wavefront read as a gradient along one conductor rather than as
+ * tiles switching on and off.
  */
-function paintBody(ctx, cells, view) {
+function paintBody(ctx, cells, view, wave) {
   const { cellSize, palette } = view;
   const size = Math.max(1, cellSize - BODY_INSET_PX * 2);
 
@@ -169,7 +227,7 @@ function paintBody(ctx, cells, view) {
     const y = cell.y * cellSize;
     const toward = cells[i - 1];
 
-    ctx.globalAlpha = traceAlpha(i, cells.length);
+    ctx.globalAlpha = waveAlpha(i, cells.length, wave);
     ctx.beginPath();
     ctx.rect(x + BODY_INSET_PX, y + BODY_INSET_PX, size, size);
 
@@ -199,12 +257,92 @@ function traceDiamond(ctx, cx, cy, radius) {
 }
 
 /**
- * Draw one frame. Pure with respect to the game: reads state, writes pixels.
- *
- * Allocates nothing. Every value below is a number, and the only objects
- * touched are the frozen ones captured at creation.
+ * The food's two radii, in CSS pixels. Scalars rather than a pair, because this is
+ * read in the draw path and an object here would be the per-frame allocation the
+ * project forbids.
  */
-function paintFrame(ctx, state, view) {
+function foodRadius(cellSize) {
+  return Math.max(1, (cellSize - FOOD_INSET_PX * 2) / 2);
+}
+
+function foodHaloRadius(cellSize) {
+  return foodRadius(cellSize) + Math.max(1, cellSize * FOOD_HALO_SPREAD_RATIO);
+}
+
+/**
+ * The eaten node's halo, expanding and fading on the cell it was consumed on.
+ *
+ * The shape is the food's own halo rather than a new one, because what the player
+ * is watching is the node's light leaving it — a thing the board already knows how
+ * to say, and so not worth saying twice in two visual languages.
+ *
+ * Drawn in the food layer, before the snake. The head arrives on this very cell, so
+ * it covers the flare's centre while the light spreads out past it, and the trace —
+ * painted afterwards — can never be occluded by a celebration of it eating.
+ */
+function paintFlares(ctx, effects, view) {
+  const { cellSize, palette } = view;
+  const reach = foodHaloRadius(cellSize);
+
+  ctx.fillStyle = palette.food;
+
+  for (let i = 0; i < effects.slots.length; i += 1) {
+    const slot = effects.slots[i];
+    if (!slot.active || slot.kind !== EFFECT.EAT) continue;
+
+    // Linear, and measurably so. The squared curve this replaces was chosen to stop
+    // a haze hanging over the cell the snake is now sitting on — but the head is
+    // opaque and painted after this, so there is no haze over that cell to suppress.
+    // The only part a faster fade could remove was the part outside the head, which
+    // is the whole of what the player can see: measured under an arriving head, the
+    // squared curve left a single tinted pixel at the head's own edge and nothing
+    // beyond it.
+    ctx.globalAlpha = FOOD_HALO_ALPHA * (1 - slot.t);
+
+    // Front-loaded growth, for the same reason and by the same measurement. The
+    // flare starts at the halo's radius, which is barely wider than the half cell the
+    // head paints over, so a linear expansion spends its brightest moments still
+    // hidden. The square root puts it out past the head while it still has
+    // brightness to spend, and leaves the rest of its life to the fade.
+    traceDiamond(
+      ctx,
+      (slot.x + 0.5) * cellSize,
+      (slot.y + 0.5) * cellSize,
+      reach + Math.sqrt(slot.t) * cellSize * FOOD_FLARE_SPREAD_RATIO,
+    );
+    ctx.fill();
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * The run's outcome effect, if there is one — the single slot the whole trace's
+ * wavefront is read from.
+ *
+ * Returned by reference and never copied: it is read once per frame while the body
+ * is drawn, and building anything here is the per-frame allocation the project
+ * forbids.
+ */
+function outcomeOf(effects) {
+  const slots = effects.slots;
+
+  for (let i = 0; i < slots.length; i += 1) {
+    const slot = slots[i];
+    if (slot.active && slot.kind !== EFFECT.EAT) return slot;
+  }
+
+  return null;
+}
+
+/**
+ * Draw one frame. Pure with respect to the game: reads state and the event
+ * timeline, writes pixels.
+ *
+ * Allocates nothing. Every value below is a number, and the only objects touched
+ * are the frozen ones captured at creation and the effects' own preallocated slots.
+ */
+function paintFrame(ctx, state, view, effects) {
   const { boardPx, cellSize, palette, cache } = view;
 
   ctx.drawImage(cache, 0, 0, boardPx, boardPx);
@@ -217,7 +355,6 @@ function paintFrame(ctx, state, view) {
   // board was cleared.
   const food = state.food;
   if (food !== null) {
-    const radius = Math.max(1, (cellSize - FOOD_INSET_PX * 2) / 2);
     const cx = (food.x + 0.5) * cellSize;
     const cy = (food.y + 0.5) * cellSize;
 
@@ -226,20 +363,27 @@ function paintFrame(ctx, state, view) {
     // The halo: a second filled path. It is the only glow on the board, and it
     // is what makes the objective the first thing the eye finds.
     ctx.globalAlpha = FOOD_HALO_ALPHA;
-    traceDiamond(ctx, cx, cy, radius + Math.max(1, cellSize * FOOD_HALO_SPREAD_RATIO));
+    traceDiamond(ctx, cx, cy, foodHaloRadius(cellSize));
     ctx.fill();
 
     ctx.globalAlpha = 1;
-    traceDiamond(ctx, cx, cy, radius);
+    traceDiamond(ctx, cx, cy, foodRadius(cellSize));
     ctx.fill();
   }
 
+  // Under the snake, so the trace always wins where the two overlap.
+  paintFlares(ctx, effects, view);
+
   // Tail to neck, so the head is painted last and never partially covered.
-  paintBody(ctx, cells, view);
+  paintBody(ctx, cells, view, outcomeOf(effects));
 
   // The head fills its whole cell. That size difference is what keeps head and
   // body apart for a colour-blind player — they are only 1.46:1 apart in
   // luminance, so the silhouette is load-bearing.
+  //
+  // It is also the one part of the snake the outcome's wavefront does not touch.
+  // The trace going out is the signal stopping; the head is the pad it stopped at,
+  // and leaving it lit is what still says where the run ended.
   const head = cells[0];
   ctx.fillStyle = palette.head;
   ctx.fillRect(head.x * cellSize, head.y * cellSize, cellSize, cellSize);
@@ -261,7 +405,7 @@ function paintFrame(ctx, state, view) {
 /**
  * @param {HTMLCanvasElement} canvas
  * @param {HTMLElement} board the element whose content box the board must fit
- * @returns {{ draw: (state: object) => void }}
+ * @returns {{ draw: (state: object, effects: object) => void }}
  */
 export function createRenderer(canvas, board) {
   const ctx = canvas.getContext('2d');
@@ -360,8 +504,8 @@ export function createRenderer(canvas, board) {
   resize();
 
   return {
-    draw(state) {
-      paintFrame(ctx, state, view);
+    draw(state, effects) {
+      paintFrame(ctx, state, view, effects);
     },
   };
 }

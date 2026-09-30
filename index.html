@@ -42,6 +42,12 @@
                  showing it, so the whole line is replaced rather than reworded. -->
             <p class="overlay__detail overlay__detail--keys">Press <kbd>Enter</kbd> to start</p>
             <p class="overlay__detail overlay__detail--touch">Tap the pad to start</p>
+            <!-- Two lines, and only ever one of them shown. The hint has to name
+                 the state the key would change, and sound is on for a first visit
+                 and may not be for a later one. Keyboard only: where there is a
+                 button instead of a keyboard, that button already says which. -->
+            <p class="overlay__detail overlay__detail--keys" id="hint-sound-on">Press <kbd>M</kbd> to mute</p>
+            <p class="overlay__detail overlay__detail--keys" id="hint-sound-off" hidden>Press <kbd>M</kbd> for sound</p>
             <!-- Filled and unhidden by main.js, and only once a game has been
                  finished. Left empty and `hidden` here so a first visit — which
                  has no record to show — is exactly the screen it was before this
@@ -78,11 +84,16 @@
            measures, and putting controls inside it would let them shrink the
            board they are meant to serve.
 
-           The pause control sits with the pad rather than in the HUD row. It was
+           Both controls sit with the pad rather than in the HUD row. Pause was
            specified for the HUD, but measured: a 44px control in the 40px HUD row
            grows that row by 17px, which at 480x720 leaves the board 3px of slack
            and at 844x390 drops the cell size from 12 to 11. The board does not get
-           smaller to make room for a button. -->
+           smaller to make room for a button, and the same arithmetic settles the
+           sound control: it is here, or it is a key.
+
+           Its label is written by main.js and reports the state it is in, so the
+           one control that produces silence is never the one thing that cannot
+           confirm it did something. -->
       <div class="controls">
         <div class="pad" id="pad" role="group" aria-label="Direction">
           <!-- tabindex="-1": these are for a finger. The arrow keys already reach
@@ -94,7 +105,8 @@
           <button type="button" class="pad__key pad__key--right" data-direction="right" tabindex="-1" aria-label="Right"><span class="pad__chevron"></span></button>
           <button type="button" class="pad__key pad__key--down" data-direction="down" tabindex="-1" aria-label="Down"><span class="pad__chevron"></span></button>
         </div>
-        <button type="button" class="pause" id="pause">Pause</button>
+        <button type="button" class="control" id="pause">Pause</button>
+        <button type="button" class="control" id="sound">Sound</button>
       </div>
     </main>
   </body>

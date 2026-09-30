@@ -1,13 +1,19 @@
-import { STATS_KEY } from './config.js';
+import { SETTINGS_KEY, STATS_KEY } from './config.js';
 
 /**
- * The player's saved record: the best score, and the longest snake.
+ * Everything the game remembers between visits: the player's record, and whether
+ * they want it to make a sound.
  *
  * This is the only module in the project that touches `localStorage`, and
  * everything it does is best-effort. Storage can be full, disabled by policy,
  * or absent outright, and in Safari's private mode even reading the property
  * throws. A player without working storage gets the game exactly as it was
  * before this module existed, and hears nothing about it.
+ *
+ * The two are stored under separate keys rather than as one object. They are
+ * unrelated, they fail independently, and keeping them together would mean a
+ * corrupt score silently taking the sound setting down with it — which is the
+ * failure all-or-nothing validation exists to prevent, not to cause.
  *
  * Attempts are deliberately not here. They count a session, not a career: the
  * player who reloads starts again at one. What survives a reload is the record.
@@ -22,11 +28,65 @@ import { STATS_KEY } from './config.js';
 /** What a missing, unreadable, or rejected record reads as. */
 export const EMPTY_STATS = Object.freeze({ best: 0, longest: 0 });
 
-// Every field is a count of something, so every field is a non-negative
-// integer. `isSafeInteger` also rejects Infinity, NaN, and 1e999 — which
-// JSON.parse will happily hand back as Infinity.
+/** Sound is on until the player says otherwise. */
+const DEFAULT_MUTED = false;
+
+// Every field of the record is a count of something, so every field is a
+// non-negative integer. `isSafeInteger` also rejects Infinity, NaN, and 1e999 —
+// which JSON.parse will happily hand back as Infinity.
 function isCount(value) {
   return Number.isSafeInteger(value) && value >= 0;
+}
+
+/**
+ * Read a key and parse it as a plain object, or return null.
+ *
+ * Every way this can fail lands in the same place: the key absent, unreadable,
+ * not JSON at all, or JSON that is not an object. Both readers below want the
+ * same thing from that — to fall back to their defaults — so the difference
+ * between the failures is discarded here rather than at each call site.
+ *
+ * Reading `window.localStorage` is itself inside the try, because in Safari's
+ * private mode the property access is what throws, not the methods on it.
+ */
+function readObject(key) {
+  let raw;
+  try {
+    raw = window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+
+  if (raw === null) return null;
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  // null, an array, and a bare string or number all parse fine and are all wrong.
+  // Only a plain object can carry named fields.
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return null;
+  }
+
+  return parsed;
+}
+
+/**
+ * Write a value under a key. Never throws.
+ *
+ * A failure here costs the player their record, or their sound preference, and
+ * nothing else — which is not worth an error the game cannot act on.
+ */
+function write(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Full, disabled, or absent. The record is a nicety; the game is not.
+  }
 }
 
 /**
@@ -43,28 +103,8 @@ function isCount(value) {
  * @returns {{best: number, longest: number}}
  */
 export function loadStats() {
-  let raw;
-  try {
-    raw = window.localStorage.getItem(STATS_KEY);
-  } catch {
-    // Unavailable, not merely empty. Reading the property is itself the throw.
-    return EMPTY_STATS;
-  }
-
-  if (raw === null) return EMPTY_STATS;
-
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return EMPTY_STATS;
-  }
-
-  // null, an array, and a bare string or number all parse fine and are all
-  // wrong. Only a plain object can carry the two fields.
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return EMPTY_STATS;
-  }
+  const parsed = readObject(STATS_KEY);
+  if (parsed === null) return EMPTY_STATS;
 
   const { best, longest } = parsed;
   if (!isCount(best) || !isCount(longest)) return EMPTY_STATS;
@@ -77,17 +117,35 @@ export function loadStats() {
 /**
  * Write the record. Never throws.
  *
- * A failure here costs the player their record and nothing else, which is not
- * worth an error the game cannot act on.
- *
  * @param {{best: number, longest: number}} stats
  */
 export function saveStats(stats) {
-  try {
-    window.localStorage.setItem(STATS_KEY, JSON.stringify(stats));
-  } catch {
-    // Full, disabled, or absent. The record is a nicety; the game is not.
-  }
+  write(STATS_KEY, stats);
+}
+
+/**
+ * Whether the player has turned the sound off.
+ *
+ * A preference rather than a record, and validated the same way: anything that is
+ * not exactly the shape this writes — the key absent, invalid JSON, a `muted` that
+ * is a string or missing — reads as the default rather than as a value to
+ * interpret. There is no partial answer to "should this be silent".
+ *
+ * @returns {boolean}
+ */
+export function loadMuted() {
+  const parsed = readObject(SETTINGS_KEY);
+  if (parsed === null || typeof parsed.muted !== 'boolean') return DEFAULT_MUTED;
+  return parsed.muted;
+}
+
+/**
+ * Write the sound preference. Never throws.
+ *
+ * @param {boolean} muted
+ */
+export function saveMuted(muted) {
+  write(SETTINGS_KEY, { muted });
 }
 
 /**

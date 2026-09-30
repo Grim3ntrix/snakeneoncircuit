@@ -4,7 +4,9 @@ import { OUTCOME, queueDirection, step } from './simulation.js';
 import { randomSeed } from './rng.js';
 import { attachInput } from './input.js';
 import { createRenderer } from './renderer.js';
-import { loadStats, mergeResult, saveStats } from './storage.js';
+import { createEffects, EFFECT } from './effects.js';
+import { createAudio, SOUND } from './audio.js';
+import { loadMuted, loadStats, mergeResult, saveMuted, saveStats } from './storage.js';
 
 /**
  * Bootstrap, the frame loop, and the wiring between the other modules.
@@ -31,6 +33,10 @@ const dom = {
   overDetail: requireElement('over-detail'),
   overAttempts: requireElement('over-attempts'),
   record: requireElement('record'),
+  pause: requireElement('pause'),
+  sound: requireElement('sound'),
+  soundOnHint: requireElement('hint-sound-on'),
+  soundOffHint: requireElement('hint-sound-off'),
 };
 
 const renderer = createRenderer(dom.canvas, dom.board);
@@ -42,6 +48,22 @@ let lastFrame = 0;
 // Read once at startup and replaced wholesale thereafter, the same way `state`
 // is, so the record can never be half-updated.
 let stats = loadStats();
+
+// The sound preference, and the single answer to "should this game make a noise".
+// Both consumers are told rather than asked: `audio` is pushed the value on every
+// change, and the interface reads it to decide what the sound control says. Two
+// copies of this boolean would eventually disagree, and the failure would be a
+// button claiming sound is on over a silent board.
+let muted = loadMuted();
+
+const audio = createAudio({ muted });
+
+// Read once, like the palette. A media query per frame would be the one thing in
+// the draw path that is not arithmetic, and a player who changes this preference
+// mid-session is changing it for every other page they have open too.
+const effects = createEffects({
+  reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+});
 
 // Runs finished since this page was loaded. Deliberately not part of `stats`:
 // it is not persisted, and a reload is meant to lose it.
@@ -63,6 +85,24 @@ let isNewBest = false;
  * still "Score 42 New best" and no glyph name is read into the middle of it.
  */
 const NEW_BEST_MARK = Object.freeze({ className: 'result__mark' });
+
+/**
+ * What the game-over screen calls each ending.
+ *
+ * A table rather than a chain of conditionals, because the reasons are a closed
+ * set the simulation already names and every one of them should have a title
+ * somebody wrote, rather than the last branch being a catch-all that happens to
+ * read correctly for the common case.
+ *
+ * The title is where the reason goes rather than the detail line, so the panel
+ * does not get taller: it replaces a line rather than adding one, which leaves
+ * the fit at 320px exactly as it was.
+ */
+const OVER_TITLES = Object.freeze({
+  [REASON.WALL]: 'Hit a wall',
+  [REASON.SELF]: 'Bit itself',
+  [REASON.WIN]: 'Board cleared',
+});
 
 /**
  * Write a sentence built from `parts` into `element`.
@@ -159,13 +199,34 @@ function finishRun() {
   saveStats(stats);
 }
 
-/** Push the phase, score, and record into the DOM. Called only on a real change. */
+/** Push the phase, score, record, and sound state into the DOM. Called on a real change. */
 function syncDom() {
   dom.score.textContent = String(state.score);
 
   dom.ready.hidden = state.phase !== PHASE.READY;
   dom.paused.hidden = state.phase !== PHASE.PAUSED;
   dom.over.hidden = state.phase !== PHASE.OVER;
+
+  // The sound control reports its own state in its own label, so muting is never
+  // a silent, unacknowledged action — which for this control would be the worst
+  // possible outcome, because silence is exactly what it produces and so cannot
+  // also be the thing that confirms it happened.
+  dom.sound.textContent = muted ? 'Muted' : 'Sound';
+
+  // Pause is the one control that is not always answerable: there is nothing to
+  // pause on the ready screen and nothing to resume on the over screen. It is
+  // disabled rather than hidden, because hiding it would reflow the row it shares
+  // with the pad — and disabled rather than left live, because a control that
+  // lights up under a thumb and then does nothing is worse than one that says so
+  // before it is pressed.
+  dom.pause.disabled = state.phase !== PHASE.PLAYING && state.phase !== PHASE.PAUSED;
+
+  // The keyboard hint and the control are complements, not alternatives: CSS
+  // shows this pair only where there is a keyboard and hides it where there is a
+  // button. Which of the two is worded as available is the same question the
+  // label above answers.
+  dom.soundOnHint.hidden = muted;
+  dom.soundOffHint.hidden = !muted;
 
   // Hidden rather than emptied: an empty line still takes the panel's gap, so a
   // first visit would sit lower than it does today. `longest` is never zero once
@@ -179,8 +240,10 @@ function syncDom() {
 
   if (state.phase === PHASE.OVER) {
     const won = state.over.reason === REASON.WIN;
-    // Clearing the board is a different event from dying, so it says so.
-    dom.overTitle.textContent = won ? 'Board cleared' : 'Game over';
+    // Why the run ended, not merely that it did. A wall, the snake's own body,
+    // and a board with nowhere left to go are three different events, and a
+    // player who died on themselves should not be told they hit a wall.
+    dom.overTitle.textContent = OVER_TITLES[state.over.reason];
     writeLine(dom.overDetail, formatResult({
       won,
       score: state.score,
@@ -200,6 +263,12 @@ function syncDom() {
  * @param {{x: number, y: number} | null} requestedDirection
  */
 function start(requestedDirection) {
+  // First, because this is the call that is allowed to create the audio context,
+  // and it only is because it runs synchronously inside the press that started the
+  // game. A context built anywhere else is built outside a user gesture, which
+  // leaves it suspended and puts a warning in the console — see src/audio.js.
+  audio.unlock();
+
   state = createInitialState({ seed: randomSeed() });
   state.phase = PHASE.PLAYING;
 
@@ -211,6 +280,11 @@ function start(requestedDirection) {
   // accumulated while the ready or over overlay was up.
   accumulator = 0;
   lastFrame = performance.now();
+
+  // A death is held settled on the board so that the over screen keeps showing
+  // where the run ended. That is the one thing that must not survive into the
+  // next run: without this, the new snake would be drawn cold.
+  effects.clear();
 
   // The previous run's verdict belongs to the overlay that has just been hidden.
   isNewBest = false;
@@ -228,7 +302,30 @@ function togglePause() {
   syncDom();
 }
 
+/**
+ * Turn the sound on or off, and remember which.
+ *
+ * Not phase-checked, unlike pausing: this is a setting rather than a move, so it
+ * is answerable on every screen the game has — including the ready screen, which
+ * is where a player is most likely to reach for it.
+ *
+ * The write is best-effort and the in-memory value is the truth for this session,
+ * so a player whose storage is unavailable gets a control that works for as long
+ * as the page is open, rather than one that appears to work and does not.
+ */
+function toggleMute() {
+  muted = !muted;
+  audio.setMuted(muted);
+  saveMuted(muted);
+  syncDom();
+}
+
 function handleVisibilityChange() {
+  // Independent of the phase. A tab nobody is looking at has no reason to hold a
+  // running audio thread, whether or not a game is in progress — and it is the
+  // phase that decides whether the game also pauses.
+  audio.setHidden(document.hidden);
+
   if (document.hidden && state.phase === PHASE.PLAYING) {
     state.phase = PHASE.PAUSED;
     syncDom();
@@ -246,6 +343,11 @@ function frame(now) {
   // resumed tab — which would otherwise discharge dozens of ticks at once.
   if (dt > MAX_FRAME_MS) dt = MAX_FRAME_MS;
 
+  // Aged before the ticks below, not after. An effect spawned by this frame's tick
+  // is then drawn at the instant it happened rather than a whole tick into its
+  // life, which for the shortest of them would be halfway through.
+  effects.advance(dt);
+
   accumulator += dt;
 
   // Drained unconditionally. Draining only while playing would let time pile up
@@ -257,21 +359,39 @@ function frame(now) {
     const outcome = step(state);
     if (outcome === OUTCOME.ATE) {
       dom.score.textContent = String(state.score);
+
+      // The head has just moved onto the node's cell, so that is where the node
+      // was — which is precisely where the flare belongs, and why the cell does
+      // not have to be remembered from before the step.
+      effects.spawn(EFFECT.EAT, state.cells[0]);
+      audio.play(SOUND.EAT);
     } else if (outcome !== OUTCOME.NONE) {
       // Terminal: a wall, itself, or a cleared board. Recorded before the overlay
       // is written, because that overlay reports the comparison.
       finishRun();
       syncDom();
+
+      // Clearing the board and being stopped are the same kind of moment and two
+      // different events, so they get two different readings of the one wavefront:
+      // the signal completing, or the signal cut off. See src/renderer.js.
+      const won = state.over.reason === REASON.WIN;
+      effects.spawn(won ? EFFECT.WIN : EFFECT.DEATH);
+      audio.play(won ? SOUND.WIN : SOUND.DEATH);
+
+      // Last, and always after the outcome's own voice: it is a remark on the run
+      // that just ended, not an alternative ending to it.
+      if (isNewBest) audio.play(SOUND.BEST);
     }
   }
 
-  renderer.draw(state);
+  renderer.draw(state, effects);
 }
 
 attachInput({
   getState: () => state,
   start,
   togglePause,
+  toggleMute,
   turn: (direction) => queueDirection(state, direction),
 });
 

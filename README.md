@@ -18,13 +18,15 @@ The guiding standard for this project is that functional does not mean finished.
 
 The board is drawn as a printed circuit — substrate, a two-tier grid, corner fiducials. The snake is a single trace carrying a signal that attenuates from the head to the tail, which is both the identity and a gameplay aid: it tells you which way you are travelling without your having to find the head. Food is the only lit element on the board. The reasoning behind the palette and the form is in [the identity spec](docs/tasks/002-neon-circuit-identity.md).
 
-It is playable on a phone with no keyboard at all. A four-way pad and a pause control appear whenever the device's primary pointer is coarse, and the overlay copy swaps with them — naming the pad rather than a key the device does not have. Nothing is detected at runtime and there is nothing to configure: the capability question is one CSS already answers, so the controls are shown by `@media (pointer: coarse)` and by nothing else.
+It is playable on a phone with no keyboard at all. A four-way pad, a pause control, and a sound control appear whenever the device's primary pointer is coarse, and the overlay copy swaps with them — naming the pad rather than a key the device does not have. Nothing is detected at runtime and there is nothing to configure: the capability question is one CSS already answers, so the controls are shown by `@media (pointer: coarse)` and by nothing else.
 
 Your best score is kept on the device and reported on the start screen, so there is something to beat the moment you arrive — and the game-over screen tells you how the run you just finished stands against it. The record lives under a single versioned `localStorage` key and is validated in full on read: a key that is absent, unreadable, or written by some future version reads as a first visit rather than as a partly-correct screen, and the game plays identically whether or not storage works at all.
 
 The game-over screen also counts your attempts. Those deliberately are not part of the record: they count the session you are in, so closing the tab loses them and the next session starts again at one.
 
-Audio is deliberately deferred to later work, and nothing here is stubbed or half-built in anticipation of it.
+It makes a noise, and it moves. The four moments that matter — eating, dying, clearing the board, and beating your record — each get a synthesised sound and an effect on the board drawn from the circuit's own vocabulary: the eaten node's glow leaving it, and a wavefront that runs the trace when the run ends. There are no audio files. Four oscillators are smaller than one `.mp3`, and an asset pipeline is a build step wearing a different hat.
+
+Sound is on until you say otherwise, and it stays that way: <kbd>M</kbd> toggles it on any screen, a **Sound** button does the same on a phone, and the choice is remembered along with your record. The control reports its own state, because silence is the one thing that cannot also be the acknowledgement that it happened.
 
 ## Play it locally
 
@@ -65,6 +67,7 @@ Eat the food. Do not hit a wall or yourself.
 | Move | <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> or <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | The direction pad |
 | Start | <kbd>Enter</kbd>, <kbd>Space</kbd>, or any direction key | Tap any direction on the pad |
 | Pause / resume | <kbd>P</kbd> or <kbd>Escape</kbd> | Tap **Pause** |
+| Mute / unmute | <kbd>M</kbd> | Tap **Sound** |
 | Play again | <kbd>Enter</kbd>, <kbd>Space</kbd>, or any direction key | Tap any direction on the pad |
 
 Pressing a direction key to start also steers — press <kbd>↑</kbd> on the start screen and the snake sets off upward. The pad behaves identically: it sits below the board in portrait and beside it in landscape, and tapping a direction starts the game in that direction.
@@ -90,9 +93,11 @@ src/config.js       Every tunable value, defined once
 src/rng.js          Seeded random number generator
 src/state.js        Phases and the initial game state
 src/simulation.js   Game rules — no DOM, no canvas, no timers
+src/effects.js      The event timeline — what just happened, and how far through
 src/input.js        Keyboard and touch input
 src/renderer.js     Canvas sizing, DPR, drawing
-src/storage.js      The saved record — read, validated, written
+src/audio.js        The four synthesised voices
+src/storage.js      The saved record and settings — read, validated, written
 src/main.js         Bootstrap and the frame loop
 CLAUDE.md           Engineering, UX, and polish standards for this repo
 .claude/            Claude Code workflows (refinement pass skill + /polish command)
@@ -107,7 +112,9 @@ The modules are split by responsibility, and the boundaries hold rather than bei
 - **`simulation.js`** holds the rules and nothing else. It contains no DOM, canvas, or timing reference at all, so the same module runs headlessly under Node as well as in the browser — which is how the collision rules can be exercised exhaustively, without a browser in the loop.
 - **`main.js`** owns a fixed-timestep accumulator over `requestAnimationFrame`. Gameplay advances in exact 120 ms steps regardless of frame rate, with a delta clamp so a stall or a resumed tab cannot discharge a burst of ticks and drive the snake into a wall.
 - **`input.js`** is the only place that listens for input, from any device. A keypress and a tap on the pad become the same intent by the same path, so touch cannot quietly lose a guarantee the keyboard has; whether a turn is *legal* is decided against the simulation's queue, not here.
-- **`renderer.js`** knows the board is 24 cells square and nothing else about the game. It never reads the score or the phase. Replacing it wholesale is the intended way to redesign the visuals.
+- **`renderer.js`** knows the board is 24 cells square and nothing else about the game. It never reads the score or the phase. It is *told* which events happened, through the same preallocated timeline the rest of the frame uses, because an effect the player can see is the one thing here that involves time. Replacing it wholesale is still the intended way to redesign the visuals.
+- **`effects.js`** holds what just happened and how far through being shown it is. It is arithmetic over a fixed array of slots allocated at construction, with no DOM, no canvas, and no Web Audio — so like the rules, it runs headlessly and is exercised without a browser in the loop. Nothing in it is ever read back by the simulation, which is what keeps the run deterministic.
+- **`audio.js`** owns one `AudioContext` and four oscillator voices. It builds that context lazily, inside the gesture that starts a game, because a context created anywhere else is created outside a user gesture — which leaves it suspended and puts a warning in the console.
 - **`storage.js`** is the only module that touches `localStorage`, and it guards every access to it — including the property read itself, because Safari's private mode throws on `window.localStorage` rather than on its methods. The record is read once at startup and replaced wholesale thereafter, and a record that fails validation is discarded whole for the defaults rather than salvaged field by field, so a half-readable record can never become a half-correct screen.
 
 The game is deterministic: the same seed and the same input sequence reproduce the same run, exactly. The arena and grid are drawn once into an offscreen canvas and reused, so the per-frame path allocates nothing.
@@ -120,7 +127,7 @@ The palette is declared once, in `css/main.css`, and read into the renderer at s
 - Canvas 2D for rendering
 - No frameworks, no bundler, no build step, no dependencies
 
-Browser-native capability is preferred over adding a library. Dependencies are treated as a cost that has to be justified. Any current evergreen browser works — the game uses ES modules, Canvas 2D, `ResizeObserver`, `localStorage`, CSS custom properties, and `env()` safe-area insets.
+Browser-native capability is preferred over adding a library. Dependencies are treated as a cost that has to be justified. Any current evergreen browser works — the game uses ES modules, Canvas 2D, `ResizeObserver`, `localStorage`, Web Audio, CSS custom properties, and `env()` safe-area insets. Where a browser does not have one of these, it is a branch rather than an error: without Web Audio the game is simply silent, and without `localStorage` it simply forgets.
 
 The canvas is sized to whole device pixels and matches the display's device pixel ratio, so the board stays sharp at 1×, 2×, and 3× rather than being resampled.
 
@@ -140,7 +147,8 @@ Indicative, not a specification.
 - [x] Visual identity and interface
 - [x] Touch controls: a four-way pad and a pause control, gated by pointer capability
 - [x] Score persistence: your best score, kept on the device
-- [ ] Audio and richer feedback
+- [x] Audio and richer feedback
+- [ ] Final polish
 
 ## License
 

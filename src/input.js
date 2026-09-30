@@ -1,4 +1,11 @@
-import { KEY_MAP, PAUSE_KEYS, START_KEYS, PREVENT_DEFAULT_KEYS, DIRECTIONS } from './config.js';
+import {
+  KEY_MAP,
+  PAUSE_KEYS,
+  START_KEYS,
+  MUTE_KEYS,
+  PREVENT_DEFAULT_KEYS,
+  DIRECTIONS,
+} from './config.js';
 import { PHASE } from './state.js';
 
 /**
@@ -13,16 +20,22 @@ import { PHASE } from './state.js';
  * while playing it is always passed through, because whether a turn is *legal*
  * depends on the queue, which the simulation owns.
  *
+ * `toggleMute` is likewise not phase-checked at all — not even to the extent
+ * `togglePause` is. Sound is a setting rather than a game action, so it is legal
+ * on the ready screen, over a finished run, and mid-game alike.
+ *
  * @param {{
  *   getState: () => { phase: string },
  *   start: (direction: {x: number, y: number} | null) => void,
  *   togglePause: () => void,
+ *   toggleMute: () => void,
  *   turn: (direction: {x: number, y: number}) => void,
  * }} handlers
  */
-export function attachInput({ getState, start, togglePause, turn }) {
+export function attachInput({ getState, start, togglePause, toggleMute, turn }) {
   const pad = document.getElementById('pad');
   const pause = document.getElementById('pause');
+  const sound = document.getElementById('sound');
 
   /**
    * The pad is part of the game now, not an optional extra, and a missing one
@@ -30,9 +43,14 @@ export function attachInput({ getState, start, togglePause, turn }) {
    * the desktop machine it was written on. So this fails as loudly as a missing
    * canvas does, where it is written rather than where it is played.
    */
-  if (pad === null || pause === null || pad.querySelectorAll('button[data-direction]').length !== 4) {
+  if (
+    pad === null ||
+    pause === null ||
+    sound === null ||
+    pad.querySelectorAll('button[data-direction]').length !== 4
+  ) {
     throw new Error(
-      'Touch controls are missing from the document: expected #pad holding four button[data-direction] and #pause',
+      'Touch controls are missing from the document: expected #pad holding four button[data-direction], #pause, and #sound',
     );
   }
 
@@ -83,9 +101,17 @@ export function attachInput({ getState, start, togglePause, turn }) {
       return;
     }
 
-    // Pause and start are toggles, so a held key *would* flip state many times
-    // a second. This is the one place auto-repeat must be filtered explicitly.
+    // Pause, mute, and start are toggles, so a held key *would* flip state many
+    // times a second. This is the one place auto-repeat must be filtered
+    // explicitly.
     if (event.repeat) return;
+
+    // First, and with no phase check: sound is a setting, not a move, so it is
+    // answerable on every screen the game has.
+    if (MUTE_KEYS.has(key)) {
+      toggleMute();
+      return;
+    }
 
     if (PAUSE_KEYS.has(key)) {
       const { phase } = getState();
@@ -137,7 +163,18 @@ export function attachInput({ getState, start, togglePause, turn }) {
     togglePause();
   }
 
+  /**
+   * The sound control takes the same gesture for the same reason. It is the one
+   * control whose label the game rewrites to report its own state — see the
+   * `#sound` handling in main.js — so pressing it is never unacknowledged.
+   */
+  function onSoundPointerDown(event) {
+    if (event.button !== 0) return;
+    toggleMute();
+  }
+
   pad.addEventListener('pointerdown', onPadPointerDown);
   pause.addEventListener('pointerdown', onPausePointerDown);
+  sound.addEventListener('pointerdown', onSoundPointerDown);
   window.addEventListener('keydown', onKeyDown);
 }
