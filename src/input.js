@@ -3,6 +3,7 @@ import {
   PAUSE_KEYS,
   START_KEYS,
   MUTE_KEYS,
+  MUSIC_KEYS,
   PREVENT_DEFAULT_KEYS,
   DIRECTIONS,
 } from './config.js';
@@ -22,17 +23,19 @@ import { PHASE } from './state.js';
  *
  * `toggleMute` is likewise not phase-checked at all — not even to the extent
  * `togglePause` is. Sound is a setting rather than a game action, so it is legal
- * on the ready screen, over a finished run, and mid-game alike.
+ * on the ready screen, over a finished run, and mid-game alike. `toggleMusic` is the
+ * same kind of thing and is handled the same way.
  *
  * @param {{
  *   getState: () => { phase: string },
  *   start: (direction: {x: number, y: number} | null) => void,
  *   togglePause: () => void,
  *   toggleMute: () => void,
+ *   toggleMusic: () => void,
  *   turn: (direction: {x: number, y: number}) => void,
  * }} handlers
  */
-export function attachInput({ getState, start, togglePause, toggleMute, turn }) {
+export function attachInput({ getState, start, togglePause, toggleMute, toggleMusic, turn }) {
   const pad = document.getElementById('pad');
   const pause = document.getElementById('pause');
   const sound = document.getElementById('sound');
@@ -51,6 +54,24 @@ export function attachInput({ getState, start, togglePause, toggleMute, turn }) 
   ) {
     throw new Error(
       'Touch controls are missing from the document: expected #pad holding four button[data-direction], #pause, and #sound',
+    );
+  }
+
+  /**
+   * The music control, one per overlay. One query wires all three, the same shape
+   * as the pad's four keys and for the same reason: a fourth screen carrying
+   * `data-music` would need nothing here.
+   *
+   * Checked rather than assumed, because a misspelled attribute makes
+   * `querySelectorAll` return an empty list, and an empty list is silently a no-op
+   * — the one failure mode that leaves a control looking finished and doing
+   * nothing at all.
+   */
+  const musicButtons = document.querySelectorAll('button[data-music]');
+
+  if (musicButtons.length === 0) {
+    throw new Error(
+      'The music control is missing from the document: expected a button[data-music] on each overlay',
     );
   }
 
@@ -88,9 +109,19 @@ export function attachInput({ getState, start, togglePause, toggleMute, turn }) 
 
     const { key } = event;
 
-    // Arrows scroll and Space scrolls or re-activates the focused element, so
-    // both are suppressed. WASD has no default behaviour worth preventing.
-    if (PREVENT_DEFAULT_KEYS.has(key)) event.preventDefault();
+    // Whether this press landed on a control rather than on the page. The music
+    // buttons are inside overlays, which makes them the first thing in the game a
+    // keyboard can reach — and a focused button is something the browser is going to
+    // activate on its own.
+    const onControl = event.target instanceof Element && event.target.closest('button') !== null;
+
+    // Arrows scroll and Space scrolls or re-activates the focused element, so both
+    // are suppressed. WASD has no default behaviour worth preventing. Space on a
+    // focused control is the exception, and the reason the check above exists:
+    // re-activating the focused element is not a default to suppress, it is the
+    // button's own activation, and suppressing it would put the music control out of
+    // reach of the one key that reaches a button.
+    if (PREVENT_DEFAULT_KEYS.has(key) && !(onControl && key === ' ')) event.preventDefault();
 
     const direction = DIRECTIONS[KEY_MAP[key]];
 
@@ -113,6 +144,14 @@ export function attachInput({ getState, start, togglePause, toggleMute, turn }) 
       return;
     }
 
+    // Immediately after it, and answered the same way, because it is the same kind
+    // of thing: the bed's own switch rather than a move. `M` beside it is the master
+    // one, and the two are adjacent on the keyboard so the pair reads as a pair.
+    if (MUSIC_KEYS.has(key)) {
+      toggleMusic();
+      return;
+    }
+
     if (PAUSE_KEYS.has(key)) {
       const { phase } = getState();
       if (phase === PHASE.PLAYING || phase === PHASE.PAUSED) togglePause();
@@ -120,6 +159,13 @@ export function attachInput({ getState, start, togglePause, toggleMute, turn }) 
     }
 
     if (START_KEYS.has(key)) {
+      // A press that lands on a focused control belongs to that control. Enter and
+      // Space start a game *and* activate a button, so without this one press would
+      // do both: start a run the player was not asking for and change the setting
+      // they were. Directions are not subject to this and were dispatched above —
+      // the arrow keys are the game's, whatever happens to be focused.
+      if (onControl) return;
+
       const { phase } = getState();
       if (phase === PHASE.READY || phase === PHASE.OVER) start(null);
     }
@@ -173,8 +219,29 @@ export function attachInput({ getState, start, togglePause, toggleMute, turn }) 
     toggleMute();
   }
 
+  /**
+   * The music controls, on all three overlays.
+   *
+   * `click`, not `pointerdown`, and this is the one place in the game where that is
+   * the right choice. The pad's argument for `pointerdown` — that a click fires on
+   * release and so adds the whole duration of the press to the latency — does not
+   * apply to a control nothing is being timed against. What applies instead is that
+   * this button is inside an overlay, which makes it the only control a keyboard can
+   * reach, and the browser synthesises a `click` for a key press and nothing else.
+   *
+   * No `preventDefault`, for the same reason the pad has none: this control's
+   * `:active` and `:focus-visible` states are the acknowledgement of the press.
+   */
+  function onMusicClick() {
+    toggleMusic();
+  }
+
   pad.addEventListener('pointerdown', onPadPointerDown);
   pause.addEventListener('pointerdown', onPausePointerDown);
   sound.addEventListener('pointerdown', onSoundPointerDown);
   window.addEventListener('keydown', onKeyDown);
+
+  for (const button of musicButtons) {
+    button.addEventListener('click', onMusicClick);
+  }
 }

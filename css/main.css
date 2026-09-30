@@ -279,6 +279,51 @@ body {
   font-size: inherit;
 }
 
+/* The music control, and the one interactive thing in any overlay.
+
+   `.overlay` is `pointer-events: none` so that clicks reach the board, and the panel
+   inside it is documented as informational. This is the exception, and it re-enables
+   the pointer for itself alone rather than for the panel around it: the panel is the
+   wider box, and a panel that swallowed clicks would take a band of the board with
+   it — the board being the one thing the overlays deliberately do not cover.
+
+   It borrows `.control` from the pad's neighbours, because it is the same kind of
+   thing — a labelled key that reports its own state — and because one class shared
+   across two homes is already this file's habit (see `.stat__value`). Everything
+   below is only what the new home changes.
+
+   Height is `--touch-target` from `.control` and is not overridden: it is the
+   accessibility floor wherever a control appears, not a property of the row.
+
+   Both changes here are custom properties rather than the properties themselves,
+   because this rule sits above `.control` in the file and at one class each the
+   later rule would win every shared property — which is how the `padding-inline`
+   that used to be written here came to do nothing at all. Setting the variables
+   instead is order-independent and makes this rule only what its comment claims:
+   what the new home changes.
+
+   The width floor is the one thing here that is genuinely new, rather than a
+   different value of something `.control` already sets. This is the only
+   control whose two labels are different lengths — "Music" against "Music off",
+   where the row's Pause never relabels and its "Sound"/"Muted" happen to be a
+   matched pair. Left to size itself to the label, the button grows 30px the
+   moment it is pressed: a layout shift caused by the acknowledgement of the
+   press, which is the worst place for one. So the floor is the longer label,
+   nine characters, plus this control's own padding and border.
+
+   `ch` is exact rather than approximate because the whole interface is set in the
+   monospace stack, where every glyph has the same advance; and the tracking is
+   counted per character because `letter-spacing` applies after the last one too.
+   The padding is read from the variable above it rather than repeated, so the two
+   cannot drift apart. The row keeps the plain `--touch-target` floor, where the
+   296px budget leaves no room to reserve anything. */
+.overlay__control {
+  --control-padding-inline: var(--space-3);
+  --control-min-width: calc(9ch + 9 * var(--tracking-wide) + 2 * var(--control-padding-inline) + 2px);
+  justify-self: center;
+  pointer-events: auto;
+}
+
 /* The mark that says the run you just finished beat your record.
 
    A new best is the one thing the game-over screen is allowed to celebrate, and
@@ -447,14 +492,18 @@ kbd {
 .control {
   display: grid;
   place-items: center;
-  min-width: var(--touch-target);
+  /* The two properties a second home may need to change. Read here with the row's
+     values as the fallback, so a home can set them without having to out-order this
+     rule — see `.overlay__control`, which is declared above it and, at one class
+     each, would otherwise lose every property the two have in common. */
+  min-width: var(--control-min-width, var(--touch-target));
   height: var(--touch-target);
   /* Small, and the sum is why: at 320px the shell leaves 296px of row for a pad of
      148px, two controls, and the gaps between them. At --space-4 a control is 77px
      wide and the row comes to 334px, which does not fit. The height is what makes
      the target 44px, and it is not negotiable; the width only has to clear
      --touch-target, which it does by 13px. */
-  padding-inline: var(--space-2);
+  padding-inline: var(--control-padding-inline, var(--space-2));
   background: var(--arena);
   border: 1px solid var(--frame);
   border-radius: var(--radius-md);
@@ -509,9 +558,14 @@ kbd {
 /* Hover, but only where hovering is a thing that exists. On a touch screen the
    browser applies :hover to whatever was last tapped and leaves it there, so an
    unguarded rule would strand a key in its hover state — looking permanently
-   lit — until the player happened to tap something else. A hybrid device with
-   both a coarse pointer and a mouse still gets the real hover state. */
-@media (pointer: coarse) and (hover: hover) {
+   lit — until the player happened to tap something else.
+
+   `hover` alone, which is wider than the `pointer: coarse and hover` this said
+   while the pad was the only thing it could reach: the pad and its neighbours are
+   hidden on a fine pointer, so the two guards named the same rule. The music
+   control lives on an overlay, where it is visible on every device, and it is the
+   one control a mouse can actually point at. */
+@media (hover: hover) {
   .pad__key:hover,
   .control:hover {
     color: var(--ink);

@@ -26,7 +26,11 @@ The game-over screen also counts your attempts. Those deliberately are not part 
 
 It makes a noise, and it moves. The four moments that matter — eating, dying, clearing the board, and beating your record — each get a synthesised sound and an effect on the board drawn from the circuit's own vocabulary: the eaten node's glow leaving it, and a wavefront that runs the trace when the run ends. There are no audio files. Four oscillators are smaller than one `.mp3`, and an asset pipeline is a build step wearing a different hat.
 
-Sound is on until you say otherwise, and it stays that way: <kbd>M</kbd> toggles it on any screen, a **Sound** button does the same on a phone, and the choice is remembered along with your record. The control reports its own state, because silence is the one thing that cannot also be the acknowledgement that it happened.
+Under a run there is music as well, and it is neither a loop nor a file. Three short figures are synthesised over one shared clock at lengths of **4, 16, and 11 steps**; the last two are coprime, so the bed takes 176 steps — about half a minute — to return to where it started, which is longer than most runs, and it can therefore be heard as music rather than as a loop. It opens as a low pulse and a figure, gains a counter-figure an octave up once the snake passes **length 12**, and accelerates from a step every 300 ms at the starting length to one every 150 ms by length 40. The player hears their own progress, which is the whole point of tying it to the snake. It starts with the run and stops with it — the menus stay quiet — and it ducks under the four voices, because an eat blip fires up to 8⅓ times a second and has to stay the loudest thing in the game.
+
+Both sound and music are on until you say otherwise, and both stay that way. <kbd>M</kbd> is the master switch and silences everything; a **Sound** button does the same on a phone. <kbd>N</kbd> toggles the bed alone, and so does a **Music** button on each overlay. Both choices are remembered along with your record, and both controls report their own state, because silence is the one thing that cannot also be the acknowledgement that it happened.
+
+The music control sits on the overlays rather than beside the pad, and that is a measurement rather than a preference: at 320px the touch row has 296px for a 148px pad and two controls of about 59px each, so a third needs roughly 67px more than exists — and the board is not going to shrink to make room for a button.
 
 ## Play it locally
 
@@ -68,6 +72,7 @@ Eat the food. Do not hit a wall or yourself.
 | Start | <kbd>Enter</kbd>, <kbd>Space</kbd>, or any direction key | Tap any direction on the pad |
 | Pause / resume | <kbd>P</kbd> or <kbd>Escape</kbd> | Tap **Pause** |
 | Mute / unmute | <kbd>M</kbd> | Tap **Sound** |
+| Music on / off | <kbd>N</kbd> | Tap **Music** on an overlay |
 | Play again | <kbd>Enter</kbd>, <kbd>Space</kbd>, or any direction key | Tap any direction on the pad |
 
 Pressing a direction key to start also steers — press <kbd>↑</kbd> on the start screen and the snake sets off upward. The pad behaves identically: it sits below the board in portrait and beside it in landscape, and tapping a direction starts the game in that direction.
@@ -83,6 +88,7 @@ Pressing a direction key to start also steers — press <kbd>↑</kbd> on the st
 - Pausing freezes the snake exactly where it is, between ticks. Resuming continues from the same cell with no half-applied move, and turns queued before the pause still apply afterwards.
 - Switching tabs auto-pauses. You never come back to a snake that moved — or died — while you were away.
 - Your best score is stored in this browser. Nothing is sent anywhere and there is no account, so clearing site data clears the record with it. Your attempt count is not stored at all — it counts the session you are in and resets when you close the tab.
+- Your sound and music settings are stored the same way and under their own key, so a corrupt record cannot take them down with it — and a stored setting that does not validate is discarded whole for the default rather than read back as a half-correct one.
 
 ## Project structure
 
@@ -96,7 +102,7 @@ src/simulation.js   Game rules — no DOM, no canvas, no timers
 src/effects.js      The event timeline — what just happened, and how far through
 src/input.js        Keyboard and touch input
 src/renderer.js     Canvas sizing, DPR, drawing
-src/audio.js        The four synthesised voices
+src/audio.js        The synthesised voices, and the bed under a run
 src/storage.js      The saved record and settings — read, validated, written
 src/main.js         Bootstrap and the frame loop
 CLAUDE.md           Engineering, UX, and polish standards for this repo
@@ -114,7 +120,7 @@ The modules are split by responsibility, and the boundaries hold rather than bei
 - **`input.js`** is the only place that listens for input, from any device. A keypress and a tap on the pad become the same intent by the same path, so touch cannot quietly lose a guarantee the keyboard has; whether a turn is *legal* is decided against the simulation's queue, not here.
 - **`renderer.js`** knows the board is 24 cells square and nothing else about the game. It never reads the score or the phase. It is *told* which events happened, through the same preallocated timeline the rest of the frame uses, because an effect the player can see is the one thing here that involves time. Replacing it wholesale is still the intended way to redesign the visuals.
 - **`effects.js`** holds what just happened and how far through being shown it is. It is arithmetic over a fixed array of slots allocated at construction, with no DOM, no canvas, and no Web Audio — so like the rules, it runs headlessly and is exercised without a browser in the loop. Nothing in it is ever read back by the simulation, which is what keeps the run deterministic.
-- **`audio.js`** owns one `AudioContext` and four oscillator voices. It builds that context lazily, inside the gesture that starts a game, because a context created anywhere else is created outside a user gesture — which leaves it suspended and puts a warning in the console.
+- **`audio.js`** owns one `AudioContext`, four oscillator voices, and the generative bed that runs underneath a game. It builds that context lazily, inside the gesture that starts a game, because a context created anywhere else is created outside a user gesture — which leaves it suspended and puts a warning in the console. The bed is scheduled from the frame loop's own tick, a lookahead ahead of the audio clock rather than on it, so there is no second timer to keep in step with the first. A step that has fallen behind that clock is moved up to it rather than caught up, which is the same rule the frame loop's delta clamp follows and for the same reason: a stall should cost one late note, not a burst of them.
 - **`storage.js`** is the only module that touches `localStorage`, and it guards every access to it — including the property read itself, because Safari's private mode throws on `window.localStorage` rather than on its methods. The record is read once at startup and replaced wholesale thereafter, and a record that fails validation is discarded whole for the defaults rather than salvaged field by field, so a half-readable record can never become a half-correct screen.
 
 The game is deterministic: the same seed and the same input sequence reproduce the same run, exactly. The arena and grid are drawn once into an offscreen canvas and reused, so the per-frame path allocates nothing.
@@ -148,6 +154,7 @@ Indicative, not a specification.
 - [x] Touch controls: a four-way pad and a pause control, gated by pointer capability
 - [x] Score persistence: your best score, kept on the device
 - [x] Audio and richer feedback
+- [x] Background music: a generative bed that grows with the snake
 - [ ] Final polish
 
 ## License

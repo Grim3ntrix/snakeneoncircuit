@@ -54,6 +54,22 @@
                  feature existed. It is not device-specific: the same figure reads
                  the same way on a phone and a desktop. -->
             <p class="overlay__meta" id="record" hidden></p>
+            <!-- The music control, and the only interactive thing in any overlay.
+
+                 Here rather than in the touch row, which 005 measured: at 320px
+                 that row has 296px for a pad of 148 and two controls of about 59
+                 each, so a third needs roughly 67px more than exists. Its other
+                 home is worse — a 44px control in the HUD row costs the board its
+                 cell size at 844x390, which 003 measured and rejected. So it goes
+                 where a player already stops: before a run, during a pause, after a
+                 death. `data-music` rather than an id, so input.js wires all three
+                 with one query.
+
+                 Its label is written by main.js and reports the state it is in.
+                 Kept live rather than disabled while the game is muted: it is a
+                 preference about the next run, not an action on this one, and on
+                 the game-over screen there is no bed to hear either way. -->
+            <button type="button" class="control overlay__control" data-music>Music</button>
           </div>
         </div>
 
@@ -62,6 +78,7 @@
             <p class="overlay__title">Paused</p>
             <p class="overlay__detail overlay__detail--keys">Press <kbd>P</kbd> or <kbd>Escape</kbd> to resume</p>
             <p class="overlay__detail overlay__detail--touch">Tap Pause to resume</p>
+            <button type="button" class="control overlay__control" data-music>Music</button>
           </div>
         </div>
 
@@ -74,6 +91,7 @@
             <p class="overlay__meta" id="over-attempts">Attempts 0</p>
             <p class="overlay__detail overlay__detail--keys">Press <kbd>Enter</kbd> to play again</p>
             <p class="overlay__detail overlay__detail--touch">Tap the pad to play again</p>
+            <button type="button" class="control overlay__control" data-music>Music</button>
           </div>
         </div>
       </div>

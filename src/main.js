@@ -6,7 +6,7 @@ import { attachInput } from './input.js';
 import { createRenderer } from './renderer.js';
 import { createEffects, EFFECT } from './effects.js';
 import { createAudio, SOUND } from './audio.js';
-import { loadMuted, loadStats, mergeResult, saveMuted, saveStats } from './storage.js';
+import { loadSettings, loadStats, mergeResult, saveSettings, saveStats } from './storage.js';
 
 /**
  * Bootstrap, the frame loop, and the wiring between the other modules.
@@ -37,6 +37,10 @@ const dom = {
   sound: requireElement('sound'),
   soundOnHint: requireElement('hint-sound-on'),
   soundOffHint: requireElement('hint-sound-off'),
+
+  // All three overlays carry one, and they are wired by input.js, which is the only
+  // module that listens for input. This side only writes their labels.
+  music: document.querySelectorAll('button[data-music]'),
 };
 
 const renderer = createRenderer(dom.canvas, dom.board);
@@ -49,14 +53,15 @@ let lastFrame = 0;
 // is, so the record can never be half-updated.
 let stats = loadStats();
 
-// The sound preference, and the single answer to "should this game make a noise".
-// Both consumers are told rather than asked: `audio` is pushed the value on every
-// change, and the interface reads it to decide what the sound control says. Two
-// copies of this boolean would eventually disagree, and the failure would be a
+// The two audio preferences, read once at startup and replaced wholesale on every
+// change, the same way `state` and `stats` are, so the pair can never be
+// half-updated. Both consumers are told rather than asked: `audio` is handed the
+// whole object, and the interface reads it to decide what the two controls say. Two
+// copies of either boolean would eventually disagree, and the failure would be a
 // button claiming sound is on over a silent board.
-let muted = loadMuted();
+let settings = loadSettings();
 
-const audio = createAudio({ muted });
+const audio = createAudio(settings);
 
 // Read once, like the palette. A media query per frame would be the one thing in
 // the draw path that is not arithmetic, and a player who changes this preference
@@ -199,7 +204,7 @@ function finishRun() {
   saveStats(stats);
 }
 
-/** Push the phase, score, record, and sound state into the DOM. Called on a real change. */
+/** Push the phase, score, record, and both audio settings into the DOM. Called on a real change. */
 function syncDom() {
   dom.score.textContent = String(state.score);
 
@@ -211,7 +216,20 @@ function syncDom() {
   // a silent, unacknowledged action — which for this control would be the worst
   // possible outcome, because silence is exactly what it produces and so cannot
   // also be the thing that confirms it happened.
-  dom.sound.textContent = muted ? 'Muted' : 'Sound';
+  dom.sound.textContent = settings.muted ? 'Muted' : 'Sound';
+
+  // The music control does the same, on all three overlays at once, because it is
+  // one setting rather than three. "Music off" rather than "Muted": mute is already
+  // the master switch's word, and one word cannot be the label of two switches that
+  // do different things.
+  //
+  // It stays live while the game is muted. That is deliberate — it is a preference
+  // about what the next game will sound like, not an action on this one — and the
+  // label changing is what confirms the press, exactly as it does for the control
+  // beside the pad.
+  for (const button of dom.music) {
+    button.textContent = settings.music ? 'Music' : 'Music off';
+  }
 
   // Pause is the one control that is not always answerable: there is nothing to
   // pause on the ready screen and nothing to resume on the over screen. It is
@@ -225,8 +243,8 @@ function syncDom() {
   // shows this pair only where there is a keyboard and hides it where there is a
   // button. Which of the two is worded as available is the same question the
   // label above answers.
-  dom.soundOnHint.hidden = muted;
-  dom.soundOffHint.hidden = !muted;
+  dom.soundOnHint.hidden = settings.muted;
+  dom.soundOffHint.hidden = !settings.muted;
 
   // Hidden rather than emptied: an empty line still takes the panel's gap, so a
   // first visit would sit lower than it does today. `longest` is never zero once
@@ -271,6 +289,7 @@ function start(requestedDirection) {
 
   state = createInitialState({ seed: randomSeed() });
   state.phase = PHASE.PLAYING;
+  syncBed();
 
   // Validated against START_DIRECTION, so a left press is safely ignored
   // rather than reversing the snake into itself on the first tick.
@@ -297,9 +316,29 @@ function togglePause() {
   else if (state.phase === PHASE.PAUSED) state.phase = PHASE.PLAYING;
   else return;
 
+  syncBed();
+
   // The direction queue is untouched, so turns made before the pause still
   // apply on resume.
   syncDom();
+}
+
+/**
+ * Tell the audio layer whether there is a run for the bed to be under.
+ *
+ * Derived from the phase in one place rather than pushed from each of the three
+ * that change it, because the question has one answer and three chances to be got
+ * wrong.
+ *
+ * A **paused** run is still a run. The bed belongs to the run, not to the game's
+ * activity: stopping it on every pause and starting it again on resume would chop
+ * the music into pieces and restart the figure at step zero each time. Ready and
+ * over are the two phases with no run, and they are the two the bed is silent on.
+ *
+ * A hidden tab is a separate question, asked separately — see `handleVisibilityChange`.
+ */
+function syncBed() {
+  audio.setPlaying(state.phase === PHASE.PLAYING || state.phase === PHASE.PAUSED);
 }
 
 /**
@@ -314,9 +353,28 @@ function togglePause() {
  * as the page is open, rather than one that appears to work and does not.
  */
 function toggleMute() {
-  muted = !muted;
-  audio.setMuted(muted);
-  saveMuted(muted);
+  settings = { ...settings, muted: !settings.muted };
+  audio.setMuted(settings.muted);
+  saveSettings(settings);
+  syncDom();
+}
+
+/**
+ * Turn the bed on or off, and remember which.
+ *
+ * The narrower of the two switches, and it sits beside the master mute on purpose:
+ * moving `M` to silence the bed as well was the whole reason music did not get an
+ * unrelated key. A player who wants the voices and nothing under them has this; a
+ * player who wants silence has `M`.
+ *
+ * Phase-checked exactly as little as the mute above is — which is to say not at all.
+ * A player on the ready screen is choosing what the run they are about to start will
+ * sound like, and that is the moment the choice is most likely to be made.
+ */
+function toggleMusic() {
+  settings = { ...settings, music: !settings.music };
+  audio.setMusic(settings.music);
+  saveSettings(settings);
   syncDom();
 }
 
@@ -348,6 +406,12 @@ function frame(now) {
   // life, which for the shortest of them would be halfway through.
   effects.advance(dt);
 
+  // Beside it, and for the same shape of reason: the bed is scheduled ahead of the
+  // clock rather than on it, so it needs a regular visit rather than a timer of its
+  // own. A no-op on most frames — the lookahead is shorter than a step — and it
+  // allocates only when it actually has a note to place.
+  audio.tick(state.cells.length);
+
   accumulator += dt;
 
   // Drained unconditionally. Draining only while playing would let time pile up
@@ -369,6 +433,7 @@ function frame(now) {
       // Terminal: a wall, itself, or a cleared board. Recorded before the overlay
       // is written, because that overlay reports the comparison.
       finishRun();
+      syncBed();
       syncDom();
 
       // Clearing the board and being stopped are the same kind of moment and two
@@ -392,6 +457,7 @@ attachInput({
   start,
   togglePause,
   toggleMute,
+  toggleMusic,
   turn: (direction) => queueDirection(state, direction),
 });
 

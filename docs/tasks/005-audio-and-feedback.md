@@ -103,6 +103,7 @@ deliberate trade that this task reverses on purpose, having weighed the same thi
 - **Difficulty progression, or anything that varies `TICK_MS`.** Still deferred, as in every
   task before this one.
 - **Music, ambience, or a soundtrack.** Four event voices. There is no bed and no loop.
+  **Reversed by [006](006-background-music.md)**, which adds a generative bed under a run.
 - **Screen shake, particles, flashes, motion blur, trails, or chromatic aberration.** 002's
   anti-goals stand. The two effects below are the whole of it.
 - **Haptics.** `navigator.vibrate` is unavailable on iOS, so it cannot be relied on and
@@ -314,6 +315,13 @@ Under `snakeneoncircuit.settings.v1`, declared in `config.js` beside every other
 | --- | --- |
 | `muted` | Whether the player has turned the sound off |
 
+**[006](006-background-music.md) widens this shape to `{ muted, music }` under the same key,
+and redefines the key rather than bumping it to v2.** The versioning rule below says a future
+schema is a different key; the guarantee that rule exists for — a record written under one
+shape can never be read back as another — is delivered here by validation instead, because
+nothing outside this working tree ever wrote `v1`. The reasoning is in
+[006](006-background-music.md#what-is-stored).
+
 **Why a separate key and not a third field in `stats.v1`.** Task 004 made that key mean two
 validated counts with all-or-nothing rejection, and it made rejection all-or-nothing for a
 reason. A preference stored inside the record would mean a corrupt score also silently lost
@@ -325,6 +333,8 @@ is the versioning rule 004 set.
 
 - The key absent, the value not valid JSON, or not a JSON object.
 - `muted` missing, or not a boolean.
+- After 006: `music` missing, or not a boolean — so a record written while this was the only
+  field reads as the defaults rather than as settings missing one.
 
 Anything but exactly `{ muted: <boolean> }` reads as the default, and **the default is sound
 on**. The player has already had to press a key or tap the pad to get here, so the first
@@ -334,6 +344,12 @@ has a key and a button.
 ### Nothing else
 
 No volume, no last-used setting, no "has the player muted before". One boolean.
+
+**That is what 006 costs.** The two-boolean shape — `{ muted, music }` — is the one thing
+this decision gave up, and it gave up nothing else: the key is still one key, the shape is
+still validated whole, and a record that does not match it is still discarded rather than
+salvaged. See [006](006-background-music.md) and
+[the decision it recorded](../decisions/002-background-music.md).
 
 ---
 
@@ -604,8 +620,11 @@ Reported as unverified rather than claimed:
 
 Do not build, stub, or scaffold any of these.
 
-- **Music, ambience, or a looping bed.**
-- **A volume control, or any audio setting beyond muted.** One boolean.
+- **Music, ambience, or a looping bed.** **Reversed by [006](006-background-music.md)**,
+  which is the task that builds the bed and takes the second boolean with it. Everything
+  else on this list still stands.
+- **A volume control, or any audio setting beyond muted.** One boolean — **widened to two
+  by [006](006-background-music.md)**, which adds a music switch under the master mute.
 - **A sound for turning, pausing, or starting.**
 - **Wall-versus-self sounds** — the distinction is carried by the title and the effect's
   shape, not by ear.

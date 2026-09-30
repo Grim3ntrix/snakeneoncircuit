@@ -66,6 +66,12 @@ export const START_KEYS = new Set(['Enter', ' ']);
 // which it means, and a set that quietly answers two questions cannot.
 export const MUTE_KEYS = new Set(['m', 'M']);
 
+// The music toggle — the narrower of a pair rather than an unrelated key. `M` is
+// the master mute, so pressing it silences everything; this is the control for
+// the bed alone, and it sits beside `M` on the keyboard so the two read as one
+// subject. Free: nothing else in this module claims `n`.
+export const MUSIC_KEYS = new Set(['n', 'N']);
+
 // Arrow keys scroll the page and Space scrolls or activates, so all five are
 // suppressed. WASD has no default behaviour worth preventing.
 export const PREVENT_DEFAULT_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ']);
@@ -134,8 +140,58 @@ export const EFFECT_MS = Object.freeze({
 export const STATS_KEY = 'snakeneoncircuit.stats.v1';
 
 // A second key rather than a third field in the one above. The record and the
-// sound preference are unrelated, and keeping them in one object would mean a
+// audio preferences are unrelated, and keeping them in one object would mean a
 // corrupt score silently taking the sound setting down with it — which is exactly
 // what all-or-nothing validation is supposed to prevent, not cause. Separate keys
 // also version separately, so neither schema can be read back as the other's.
+//
+// This key holds `{ muted, music }` and stayed at v1 when the second field was
+// added, which the versioning note above says should not happen. The reason it is
+// safe here is that validation is total: `loadSettings` accepts exactly two
+// booleans and rejects the object whole otherwise, so a v1 record holding only
+// `muted` reads as the defaults rather than as settings missing a field. A bump
+// would be required if v1 had ever been written by a real browser; it had not.
 export const SETTINGS_KEY = 'snakeneoncircuit.settings.v1';
+
+// The bed under the game. Every value here is a property of the music as a whole
+// rather than of a note, so the notes themselves live beside the voices in
+// audio.js — the same split as the palette, which is a token here and a drawing
+// decision there.
+export const MUSIC = Object.freeze({
+  // The tempo ramp, as a step every `stepMs`. It runs from the starting length to
+  // `fullLength` and stops there: the acceleration is there to be heard as
+  // progress, and a bed that kept speeding up past the point where the board is
+  // full would be tracking a number the player has stopped caring about.
+  stepMsSlow: 300,
+  stepMsFast: 150,
+  fullLength: 40,
+
+  // The third layer's entry point, in cells. Before this the bed is a pulse and a
+  // figure; after it there is a counter-figure an octave up. Low enough that a
+  // player who survives the first few seconds hears the music change, which is the
+  // whole reason the bed is tied to length rather than to a clock.
+  upperFromLength: 12,
+
+  // How far ahead of the context clock steps are scheduled. Web Audio has to be
+  // given its notes early or they land late and audibly uneven, so this is a
+  // scheduling buffer rather than a latency: it is the window a stall has to
+  // exceed before a note is missed.
+  lookaheadS: 0.12,
+
+  // Where the bed sits under the master, and where it drops to when a voice plays.
+  // The dip exists for legibility rather than taste: an eat fires up to 8⅓ times a
+  // second and shares a band with the figure, so without it the acknowledgement
+  // stops being the loudest thing at exactly the moment it matters.
+  //
+  // `duckS` is the whole recovery, not the time constant: audio.js divides it by
+  // three, because `setTargetAtTime` is within about 5% of its target after three of
+  // them. Longer than the eat blip's 90ms on purpose — the dip has to outlast the
+  // sound it is clearing the way for.
+  gain: 0.5,
+  duckGain: 0.35,
+  duckS: 0.18,
+
+  // The bed's own fade, in and out. Out matters more: a run ends, and music still
+  // going over a settled board would say the run had not really ended.
+  fadeS: 0.35,
+});

@@ -1,8 +1,8 @@
 import { SETTINGS_KEY, STATS_KEY } from './config.js';
 
 /**
- * Everything the game remembers between visits: the player's record, and whether
- * they want it to make a sound.
+ * Everything the game remembers between visits: the player's record, and how they
+ * want the game to sound.
  *
  * This is the only module in the project that touches `localStorage`, and
  * everything it does is best-effort. Storage can be full, disabled by policy,
@@ -28,8 +28,8 @@ import { SETTINGS_KEY, STATS_KEY } from './config.js';
 /** What a missing, unreadable, or rejected record reads as. */
 export const EMPTY_STATS = Object.freeze({ best: 0, longest: 0 });
 
-/** Sound is on until the player says otherwise. */
-const DEFAULT_MUTED = false;
+/** The game makes a noise, and has a bed under it, until the player says otherwise. */
+export const DEFAULT_SETTINGS = Object.freeze({ muted: false, music: true });
 
 // Every field of the record is a count of something, so every field is a
 // non-negative integer. `isSafeInteger` also rejects Infinity, NaN, and 1e999 —
@@ -124,28 +124,39 @@ export function saveStats(stats) {
 }
 
 /**
- * Whether the player has turned the sound off.
+ * The two audio preferences, or the defaults.
  *
  * A preference rather than a record, and validated the same way: anything that is
- * not exactly the shape this writes — the key absent, invalid JSON, a `muted` that
- * is a string or missing — reads as the default rather than as a value to
+ * not exactly the shape this writes — the key absent, invalid JSON, a field that
+ * is a string or missing — reads as the defaults rather than as a value to
  * interpret. There is no partial answer to "should this be silent".
  *
- * @returns {boolean}
+ * Rejecting the object whole rather than salvaging the fields that look right is
+ * also what lets this key stay at v1 while its shape widens from one boolean to
+ * two. A record written before `music` existed holds only `muted`, is rejected
+ * here, and reads as the defaults — so an older record can never be read back as
+ * though it had the newer shape, which is the guarantee the versioning rule in
+ * config.js exists to provide. See docs/tasks/006-background-music.md.
+ *
+ * @returns {{muted: boolean, music: boolean}}
  */
-export function loadMuted() {
+export function loadSettings() {
   const parsed = readObject(SETTINGS_KEY);
-  if (parsed === null || typeof parsed.muted !== 'boolean') return DEFAULT_MUTED;
-  return parsed.muted;
+  if (parsed === null) return DEFAULT_SETTINGS;
+  if (typeof parsed.muted !== 'boolean' || typeof parsed.music !== 'boolean') return DEFAULT_SETTINGS;
+
+  // Rebuilt field by field, like the record above, so nothing else the stored
+  // JSON happened to contain can travel any further.
+  return { muted: parsed.muted, music: parsed.music };
 }
 
 /**
- * Write the sound preference. Never throws.
+ * Write both audio preferences. Never throws.
  *
- * @param {boolean} muted
+ * @param {{muted: boolean, music: boolean}} settings
  */
-export function saveMuted(muted) {
-  write(SETTINGS_KEY, { muted });
+export function saveSettings(settings) {
+  write(SETTINGS_KEY, settings);
 }
 
 /**
