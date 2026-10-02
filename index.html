@@ -109,6 +109,13 @@
            smaller to make room for a button, and the same arithmetic settles the
            sound control: it is here, or it is a key.
 
+           And they sit beside the pad rather than on a row with it, one above
+           the other, so the pad's nearest neighbour is diagonal instead of
+           adjacent: a thumb that overshoots the pad's right key travels into the
+           gap rather than onto a button. The row still costs the board nothing,
+           because the pair is 104px tall against the pad's 148 — the pad is still
+           what sizes the row, at every viewport.
+
            Its label is written by main.js and reports the state it is in, so the
            one control that produces silence is never the one thing that cannot
            confirm it did something. -->
@@ -123,8 +130,17 @@
           <button type="button" class="pad__key pad__key--right" data-direction="right" tabindex="-1" aria-label="Right"><span class="pad__chevron"></span></button>
           <button type="button" class="pad__key pad__key--down" data-direction="down" tabindex="-1" aria-label="Down"><span class="pad__chevron"></span></button>
         </div>
-        <button type="button" class="control" id="pause">Pause</button>
-        <button type="button" class="control" id="sound">Sound</button>
+        <!-- Sound above Pause, which is left over from the first attempt at this and
+             is kept rather than churned. It was the whole fix once — a thumb that
+             overshot the pad used to land on whichever control was nearest, and
+             Sound is the one that is safe to hit by accident. Stacked and centred on
+             the pad, the two are now exactly equidistant from it, so the order
+             decides nothing; the 32px gap and the dead lane do. Sorting them the
+             other way would be a change with no measurement behind it. -->
+        <div class="controls__neighbours">
+          <button type="button" class="control" id="sound">Sound</button>
+          <button type="button" class="control" id="pause">Pause</button>
+        </div>
       </div>
     </main>
   </body>

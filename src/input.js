@@ -200,34 +200,60 @@ export function attachInput({ getState, start, togglePause, toggleMute, toggleMu
   }
 
   /**
-   * The pause control shares the pad's gesture, so it registers as promptly as a
-   * direction does. Whether the pause is legal is the caller's question, exactly
-   * as it is for the P key, so it is not asked twice here.
+   * `click`, not `pointerdown` — and the pad's reason for `pointerdown` is the
+   * reason it does not apply here.
+   *
+   * That reason is latency: a click fires on release, so it adds the whole press
+   * to a turn's delay and does not fire at all if the finger slides off, "during
+   * fast play, exactly when the input matters most". Nothing is timed against a
+   * pause — the simulation is not waiting on it and a pause that lands 80ms later
+   * is not late, it is a pause.
+   *
+   * What that leaves is the other half of the same property, and it is the point:
+   * a click needs the down and the up on the same element, so a thumb that lands
+   * on Pause on its way to the pad and slides off does nothing at all. That is the
+   * accidental pause a phone player reported, and this makes it a no-op.
+   *
+   * Whether the pause is legal is not asked here, and it is answered twice anyway:
+   * the button is `disabled` outside PLAYING and PAUSED, so a click cannot arrive
+   * at all, and `togglePause` returns unchanged on any other phase. The keyboard
+   * path above checks the phase in this file because it has nothing else to lean
+   * on — the P key is always live. The same check here would be unreachable.
    */
-  function onPausePointerDown(event) {
-    if (event.button !== 0) return;
+  function onPauseClick() {
     togglePause();
   }
 
   /**
-   * The sound control takes the same gesture for the same reason. It is the one
-   * control whose label the game rewrites to report its own state — see the
-   * `#sound` handling in main.js — so pressing it is never unacknowledged.
+   * The sound control takes the same gesture as Pause, and this is the same
+   * decision rather than a copy of it: every control that is not the pad answers to
+   * `click`, and the pad alone answers to `pointerdown`.
+   *
+   * The pad's case for `pointerdown` is latency — a turn is timed against a 120ms
+   * tick — and nothing about a mute is timed against anything. What that leaves is
+   * the property the placement above is built on: a click needs the down and the up
+   * on the same element, so a thumb that lands on Sound on its way to the pad and
+   * slides off does nothing at all. Firing on touch-down there would undo in one
+   * line the separation the layout spends 32px to create.
+   *
+   * It is also one of the two controls the game relabels to report their own state
+   * — the Music buttons are the other — so pressing it is never unacknowledged.
+   * See the `#sound` handling in main.js.
    */
-  function onSoundPointerDown(event) {
-    if (event.button !== 0) return;
+  function onSoundClick() {
     toggleMute();
   }
 
   /**
    * The music controls, on all three overlays.
    *
-   * `click`, not `pointerdown`, and this is the one place in the game where that is
-   * the right choice. The pad's argument for `pointerdown` — that a click fires on
-   * release and so adds the whole duration of the press to the latency — does not
-   * apply to a control nothing is being timed against. What applies instead is that
-   * this button is inside an overlay, which makes it the only control a keyboard can
-   * reach, and the browser synthesises a `click` for a key press and nothing else.
+   * `click`, not `pointerdown`, for the rule Pause also follows: the pad fires on
+   * touch-down because a turn is timed against a 120ms tick and a late one is
+   * fatal, and none of that reaches a control nothing is being timed against.
+   *
+   * One more reason is this button's alone — it is inside an overlay, which makes
+   * it the only control a keyboard can reach, and the browser synthesises a `click`
+   * for a key press and nothing else.
    *
    * No `preventDefault`, for the same reason the pad has none: this control's
    * `:active` and `:focus-visible` states are the acknowledgement of the press.
@@ -237,8 +263,8 @@ export function attachInput({ getState, start, togglePause, toggleMute, toggleMu
   }
 
   pad.addEventListener('pointerdown', onPadPointerDown);
-  pause.addEventListener('pointerdown', onPausePointerDown);
-  sound.addEventListener('pointerdown', onSoundPointerDown);
+  pause.addEventListener('click', onPauseClick);
+  sound.addEventListener('click', onSoundClick);
   window.addEventListener('keydown', onKeyDown);
 
   for (const button of musicButtons) {

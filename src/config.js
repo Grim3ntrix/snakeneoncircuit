@@ -85,6 +85,38 @@ export const MIN_CELL_PX = 8;
 export const BODY_INSET_PX = 2;
 export const FOOD_INSET_PX = 3;
 
+// The head's face: two eyes, the only detail inside the head. See
+// docs/decisions/003-snake-head.md.
+//
+// The gap is the token and the eye's size is derived from what is left, rather than
+// the other way round. A fixed eye size would eat the gap as the board shrinks and
+// the pair would merge into one mark — and one mark is precisely the reading this
+// is here to avoid, since a single mark on a face is a hole while a pair is eyes.
+// Spending the token on the gap makes the separation the thing that is guaranteed.
+export const EYE_GAP_RATIO = 0.15;
+
+// Below this the pair is two 2px dots, which is the other half of the same failure:
+// eyes too small to read as eyes look like damaged pixels, twice over. There is no
+// real viewport between this and the smallest one (a 12px cell), so the threshold
+// is exactly "the smallest board anyone actually plays on".
+export const EYE_MIN_CELL_PX = 12;
+
+// How much the eyes widen at the moment of an eat, and how flat they go on a death.
+// The open step is added to the diameter; the shut step flattens each eye to a slit,
+// which is a state a settled death stays in rather than a motion.
+export const EYE_EXTRA_PX = 1;
+export const EYE_SHUT_PX = 1;
+
+// The corner radius, as a fraction of each shape's *own* size — the head at a full
+// cell, the body segments at their inset size — so both round by the same fraction
+// of themselves rather than by a shared pixel count that would favour one of them.
+//
+// A quarter is a ceiling rather than a taste call. The reference this follows has
+// rounder segments still, but its segments are separate; ours are one conductor, and
+// past about a quarter the trace stops reading as a conductor and starts reading as
+// a row of beads — which is the design this deliberately is not.
+export const CORNER_RATIO = 0.25;
+
 // Major grid lines every 6 cells. 24 divides by 6 into four, so the board reads
 // as a 4x4 arrangement of blocks rather than an unmarked field — which gives
 // the player a spatial reference and stops the lattice reading as graph paper.

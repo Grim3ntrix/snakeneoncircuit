@@ -11,6 +11,11 @@ import {
   FOOD_HALO_ALPHA,
   FOOD_HALO_SPREAD_RATIO,
   FOOD_FLARE_SPREAD_RATIO,
+  EYE_GAP_RATIO,
+  EYE_MIN_CELL_PX,
+  EYE_EXTRA_PX,
+  EYE_SHUT_PX,
+  CORNER_RATIO,
 } from './config.js';
 import { EFFECT } from './effects.js';
 
@@ -203,21 +208,39 @@ function waveAlpha(index, length, wave) {
 }
 
 /**
+ * The corner radius for a shape `size` px across.
+ *
+ * Clamped at half the shape because `roundRect` does not throw past that — it
+ * silently degrades to an ellipse — so an over-large radius would stop being a
+ * decision and start being a surprise. Half is where the arcs meet, which is the
+ * roundest a rectangle can be and still be one.
+ */
+function cornerRadius(size) {
+  return Math.min(Math.round(size * CORNER_RATIO), Math.floor(size / 2));
+}
+
+/**
  * The body, as one continuous conductor rather than a row of tiles.
  *
  * Each segment fills its inset square plus a single bridge reaching toward the
  * next segment up the body. Segment and bridge go into the same path so nothing
  * is composited twice — at alpha below 1 an overlap would show as a seam — and
- * because every segment owns exactly one bridge, the bridges tile the gaps
- * without overlapping each other either.
+ * that is also what lets a bridge run back *over* the segments it joins.
  *
- * That no-overlap rule is what makes per-segment alpha possible at all, and it is
- * what lets the wavefront read as a gradient along one conductor rather than as
- * tiles switching on and off.
+ * It has to. Rounding a segment cuts its corners away, and a bridge that stopped at
+ * the shared boundary would leave every cut showing as a notch along the trace's
+ * edge. Reaching one radius into both neighbours buries them, so the rounding
+ * survives only where a conductor actually has a corner: the outer side of a turn,
+ * and the tail. The overlap itself costs nothing — one path, filled once — and the
+ * bridges still never meet each other, each owning exactly one gap, which is what
+ * keeps the per-segment alpha below honest and the wavefront reading as a gradient
+ * along one conductor rather than as tiles switching on and off.
  */
 function paintBody(ctx, cells, view, wave) {
   const { cellSize, palette } = view;
   const size = Math.max(1, cellSize - BODY_INSET_PX * 2);
+  const radius = cornerRadius(size);
+  const bridge = BODY_INSET_PX * 2 + radius * 2;
 
   ctx.fillStyle = palette.body;
 
@@ -229,15 +252,16 @@ function paintBody(ctx, cells, view, wave) {
 
     ctx.globalAlpha = waveAlpha(i, cells.length, wave);
     ctx.beginPath();
-    ctx.rect(x + BODY_INSET_PX, y + BODY_INSET_PX, size, size);
+    ctx.roundRect(x + BODY_INSET_PX, y + BODY_INSET_PX, size, size, radius);
 
     // `max` picks the boundary the two cells share, whichever way the body
     // turns. The gap between two inset squares is always exactly two insets
-    // wide, so the bridge is too.
+    // wide, and the bridge adds one radius at each end to bury the corners it
+    // passes.
     if (toward.x !== cell.x) {
-      ctx.rect(Math.max(cell.x, toward.x) * cellSize - BODY_INSET_PX, y + BODY_INSET_PX, BODY_INSET_PX * 2, size);
+      ctx.rect(Math.max(cell.x, toward.x) * cellSize - BODY_INSET_PX - radius, y + BODY_INSET_PX, bridge, size);
     } else {
-      ctx.rect(x + BODY_INSET_PX, Math.max(cell.y, toward.y) * cellSize - BODY_INSET_PX, size, BODY_INSET_PX * 2);
+      ctx.rect(x + BODY_INSET_PX, Math.max(cell.y, toward.y) * cellSize - BODY_INSET_PX - radius, size, bridge);
     }
 
     ctx.fill();
@@ -336,6 +360,104 @@ function outcomeOf(effects) {
 }
 
 /**
+ * How far open the eye is, 0 to 1, from the newest eat flare and nothing else.
+ *
+ * It takes the smallest `t` rather than the first active slot it finds, because a
+ * second eat can arrive before the first has faded: reading whichever slot came
+ * first would let an older flare, already closing, drag the eye shut mid-bite.
+ *
+ * No eat in flight reads as fully closed, which is the resting state.
+ */
+function eatOpenness(effects) {
+  const slots = effects.slots;
+  let youngest = 1;
+
+  for (let i = 0; i < slots.length; i += 1) {
+    const slot = slots[i];
+    if (slot.active && slot.kind === EFFECT.EAT && slot.t < youngest) youngest = slot.t;
+  }
+
+  return 1 - youngest;
+}
+
+/**
+ * The head's face: two eyes, and nothing else.
+ *
+ * Two, not one, and that is the design rather than a doubling of it. A single mark
+ * on a filled square reads as a hole; a *pair* of them at the same size reads as
+ * eyes. The reading is carried by the count.
+ *
+ * They are round and dark. Round, because a square mark at this size is a dead
+ * pixel — the exact failure this replaces. Dark, because it is the only direction
+ * available: `--snake-head` sits at L 0.848, so `--ink` against it measures 1.00:1
+ * and even pure white manages only 1.17:1. There is no room above the head for a
+ * sclera, so the reference this follows is inverted — a dark eye on a lit pad rather
+ * than a lit eye on a dark one — and the 15.83:1 the head already measured against
+ * `--arena` becomes the eye's contrast instead of the head's.
+ *
+ * The travel direction is `head - neck`. `cells[1]` is the cell the head moved out
+ * of, so the two are always orthogonally adjacent and the difference is a unit step
+ * on one axis. Nothing new is passed in, and `draw` keeps its signature.
+ *
+ * Both readings come from the effects timeline and never from game state: `mood` is
+ * the outcome slot and `open` is how fresh the newest eat is, so the renderer is
+ * still only ever told *that* something happened.
+ *
+ * Allocates nothing. Each eye is centred on an exact half- or whole pixel according
+ * to its own parity, so the pair is symmetric rather than nearly so — a face is the
+ * one place on this board where being half a pixel out would show.
+ */
+function paintEye(ctx, head, neck, view, mood, open) {
+  const { cellSize, palette } = view;
+
+  // Below this the pair is two 2px dots — damaged pixels twice over, which is the
+  // failure this exists to fix rather than a smaller version of the face.
+  if (cellSize < EYE_MIN_CELL_PX || neck === undefined) return;
+
+  // The gap is spent first and the eye takes what is left, so the two can never
+  // close on each other and merge back into the single mark they replace.
+  const gap = Math.max(1, Math.round(cellSize * EYE_GAP_RATIO));
+  const across = Math.max(2, Math.floor((cellSize - BODY_INSET_PX * 2 - gap) / 2));
+  const shut = mood !== null && mood.kind === EFFECT.DEATH;
+
+  // The pupils widen together on an eat. A death does not shrink them — it shuts
+  // them to a slit, a state the settled effect holds rather than a motion it plays.
+  const radius = (across + (shut ? 0 : Math.round(open * EYE_EXTRA_PX))) / 2;
+
+  // Half a cell back from the leading edge, so the pair sits on the face rather
+  // than on the nose, and one BODY_INSET_PX in from it — the margin the body
+  // already keeps from its own cell, so this is the grid's grammar and not a new
+  // one of its own.
+  const lead = cellSize - BODY_INSET_PX - across / 2;
+  const mid = cellSize / 2;
+  const offset = (across + gap) / 2;
+
+  const x0 = head.x * cellSize;
+  const y0 = head.y * cellSize;
+
+  ctx.fillStyle = palette.arena;
+
+  for (let i = 0; i < 2; i += 1) {
+    const side = i === 0 ? -offset : offset;
+
+    // Across the face, never along it: an eye on the leading edge with its twin
+    // directly behind it would be one eye seen twice.
+    const cx = head.x !== neck.x ? (head.x > neck.x ? lead : cellSize - lead) : mid + side;
+    const cy = head.x !== neck.x ? mid + side : (head.y > neck.y ? lead : cellSize - lead);
+
+    if (shut) {
+      // A horizontal slit whatever the travel — an eye closes by the lid coming
+      // down, and the pair going out together is what says the run ended.
+      ctx.fillRect(Math.round(x0 + cx - across / 2), Math.round(y0 + cy - EYE_SHUT_PX / 2), across, EYE_SHUT_PX);
+    } else {
+      ctx.beginPath();
+      ctx.arc(x0 + cx, y0 + cy, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+/**
  * Draw one frame. Pure with respect to the game: reads state and the event
  * timeline, writes pixels.
  *
@@ -374,8 +496,12 @@ function paintFrame(ctx, state, view, effects) {
   // Under the snake, so the trace always wins where the two overlap.
   paintFlares(ctx, effects, view);
 
+  // Asked once and handed to both, rather than twice: the trace's wavefront and the
+  // head's own eye are reading the same event.
+  const outcome = outcomeOf(effects);
+
   // Tail to neck, so the head is painted last and never partially covered.
-  paintBody(ctx, cells, view, outcomeOf(effects));
+  paintBody(ctx, cells, view, outcome);
 
   // The head fills its whole cell. That size difference is what keeps head and
   // body apart for a colour-blind player — they are only 1.46:1 apart in
@@ -386,10 +512,14 @@ function paintFrame(ctx, state, view, effects) {
   // and leaving it lit is what still says where the run ended.
   const head = cells[0];
   ctx.fillStyle = palette.head;
-  ctx.fillRect(head.x * cellSize, head.y * cellSize, cellSize, cellSize);
+  ctx.beginPath();
+  ctx.roundRect(head.x * cellSize, head.y * cellSize, cellSize, cellSize, cornerRadius(cellSize));
+  ctx.fill();
 
-  // Joins the head to the neck. The head is a full cell and the neck is inset,
-  // so this gap is one inset wide, not two.
+  // The head is a full cell and the neck is inset, so the pad overhangs the trace by
+  // one inset. The bridge already covers that band, but it belongs to the trace and
+  // carries the trace's attenuation, which would put a dimmer step exactly where the
+  // signal arrives at the pad. This repaints it in the pad's own colour instead.
   const neck = cells[1];
   if (neck !== undefined) {
     if (neck.x !== head.x) {
@@ -400,6 +530,9 @@ function paintFrame(ctx, state, view, effects) {
       ctx.fillRect(head.x * cellSize + BODY_INSET_PX, edge, Math.max(1, cellSize - BODY_INSET_PX * 2), BODY_INSET_PX);
     }
   }
+
+  // Last, so the join above can never clip the eye's leading edge.
+  paintEye(ctx, head, neck, view, outcome, eatOpenness(effects));
 }
 
 /**

@@ -33,6 +33,7 @@
   --space-3: 0.75rem;
   --space-4: 1rem;
   --space-5: 1.5rem;
+  --space-6: 2rem;
 
   /* Type scale */
   --text-xs: 0.6875rem;
@@ -498,11 +499,12 @@ kbd {
      each, would otherwise lose every property the two have in common. */
   min-width: var(--control-min-width, var(--touch-target));
   height: var(--touch-target);
-  /* Small, and the sum is why: at 320px the shell leaves 296px of row for a pad of
-     148px, two controls, and the gaps between them. At --space-4 a control is 77px
-     wide and the row comes to 334px, which does not fit. The height is what makes
-     the target 44px, and it is not negotiable; the width only has to clear
-     --touch-target, which it does by 13px. */
+  /* The height is what makes the target 44px, and it is not negotiable; the width
+     only has to clear --touch-target, which this padding does by about 15px. The
+     padding was picked under a row budget that has since been lifted — portrait no
+     longer sets two controls on the pad's row — and it is kept, because the row
+     now has slack it has no use for and a wider button buys nothing the 44px
+     height has not already bought. */
   padding-inline: var(--control-padding-inline, var(--space-2));
   background: var(--arena);
   border: 1px solid var(--frame);
@@ -585,9 +587,43 @@ kbd {
     display: flex;
     align-items: center;
     justify-content: center;
-    /* --space-2 rather than --space-4, for the row budget above: the pad is 148px
-       of a 296px row, and the gaps are what is left to spend. */
-    gap: var(--space-2);
+    /* The separation between the pad and the controls beside it, and the one number
+       the whole arrangement turns on. The scale's top step was 24px until this
+       needed more: the previous arrangement spent its slack on a margin, and this
+       one reaches a step further than that margin ever did. Affordable because of
+       the arithmetic below — the row that has to hold it is 148 + 32 + 56. */
+    gap: var(--space-6);
+  }
+
+  /* Sound and Pause, stacked in a column beside the pad rather than on a row with
+     it. Three things fall out of that, and all three are the point.
+
+     The pad's nearest control is now diagonal rather than adjacent. A thumb aiming
+     at the pad's right key overshoots sideways, and sideways is where the 32px gap
+     is, not where a button is — which is the complaint this answers, and it is
+     answered by geometry rather than by making the buttons smaller or the labels
+     longer.
+
+     The pair is 44 + 16 + 44 = 104px against the pad's 148, so the row is still
+     exactly as tall as the pad and the board row above it does not move by a pixel
+     at any viewport. Separating the controls from the pad must not cost the board,
+     and this is what makes that possible.
+
+     And it is narrower than what it replaced — 236px of row against 292 — so the
+     row ends with slack instead of wanting it, which is what the wider gap above is
+     spending. */
+
+  /* The two are --space-4 apart rather than the pad's own --space-2. A tight gap is
+     right inside the pad, where every key is the same kind of action and a thumb
+     landing between two of them still means "a direction". These two are not the
+     same kind of thing as each other — one is a setting and one interrupts the run
+     — so a slip between them should be harder, and the space to make it harder is
+     free because the stack is 104px against the pad's 148. Two gaps, 16 and 32,
+     also say which of the three is the odd one out. */
+  .controls__neighbours {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
   }
 
   .overlay__detail--keys {
@@ -657,6 +693,22 @@ kbd {
 
   .pad {
     grid-column: 1 / -1;
+  }
+
+  /* The column here is the pad's own width, so there is no space beside the pad
+     for a control to sit in and the stack opens back out into the row the pad
+     already spanned. That is the arrangement this orientation has always had, and
+     the row height above was measured against it — which is why nothing else about
+     landscape changes.
+
+     The --space-4 between the two carries over from portrait, because the reason
+     for it does. They sit side by side here rather than stacked, but either way one
+     of them is a setting and the other interrupts the run. */
+  .controls__neighbours {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
   }
 
   /* The header spans both columns rather than matching the board. Matched to the
