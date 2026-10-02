@@ -121,12 +121,21 @@ const BED = Object.freeze({
 
   // The figure. One note a step, walking the scale rather than running it, so it
   // reads as a line under the board instead of as a melody competing with it.
-  figure: Object.freeze([
-    NOTE.A3, NOTE.E5, NOTE.C5, NOTE.G5,
-    NOTE.E5, NOTE.A5, NOTE.G5, NOTE.C5,
-    NOTE.A3, NOTE.E5, NOTE.A5, NOTE.G5,
-    NOTE.E5, NOTE.C5, NOTE.G5, NOTE.E5,
-  ]),
+  //
+  // `dur` is the legato: at the slowest tempo a step is 0.3s, so a note shorter
+  // than that leaves a gap where only the pulse is playing — and the pulse sits
+  // at 110 Hz, which is below what a phone speaker reproduces. A figure that
+  // overlaps its own tail is continuously audible from the first step, which is
+  // the point of having it.
+  figure: Object.freeze({
+    notes: Object.freeze([
+      NOTE.A3, NOTE.E5, NOTE.C5, NOTE.G5,
+      NOTE.E5, NOTE.A5, NOTE.G5, NOTE.C5,
+      NOTE.A3, NOTE.E5, NOTE.A5, NOTE.G5,
+      NOTE.E5, NOTE.C5, NOTE.G5, NOTE.E5,
+    ]),
+    dur: 0.28,
+  }),
 
   // The counter-figure, an octave up and half as often. It is the layer that
   // arrives when the snake gets long, which is the one thing the player hears their
@@ -156,7 +165,7 @@ const BED = Object.freeze({
  */
 const BED_VOICES = Object.freeze({
   pulse: { type: 'sine', gain: 0.28, dur: 1.0 },
-  figure: { type: 'triangle', gain: 0.30, dur: 0.18 },
+  figure: { type: 'triangle', gain: 0.30, dur: 0.28 },
   upper: { type: 'sine', gain: 0.22, dur: 0.30 },
 });
 
@@ -335,7 +344,7 @@ export function createAudio({ muted = false, music = true } = {}) {
   function scheduleStep(index, at, length) {
     if (index % BED.pulseEvery === 0) bedNote('pulse', BED.pulse, at);
 
-    bedNote('figure', BED.figure[index % BED.figure.length], at);
+    bedNote('figure', BED.figure.notes[index % BED.figure.notes.length], at);
 
     // The upper layer is the reward for a run that has got somewhere, so it is the
     // one layer gated on length rather than on the clock.

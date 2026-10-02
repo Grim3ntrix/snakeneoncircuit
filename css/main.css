@@ -49,8 +49,14 @@
 
   /* Touch targets. 44px is the accessibility floor, not a preference: the pad's
      whole footprint — 3 x 44 + 2 x 8 = 148px — follows from it, and so does the
-     arithmetic that keeps the board from shrinking to make room. */
-  --touch-target: 44px;
+     arithmetic that keeps the board from shrinking to make room.
+
+     On coarse-pointer viewports wider than 600px the target grows with the
+     viewport: a 44px pad looks fine on a 320px phone but tiny on a Samsung A13
+     in desktop mode (~800px wide), where the same 44px is a tenth of the screen
+     instead of a seventh. The clamp keeps the 44px floor on phones and scales
+     to 56px at 1200px, which is still well under the shell's own cap. */
+  --touch-target: clamp(44px, 2.5vw + 32px, 56px);
 
   /* The pad's footprint: three keys and the two gaps between them. Named because
      the board's maximum width in landscape has to leave room for it, and a
