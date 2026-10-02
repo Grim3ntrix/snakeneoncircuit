@@ -142,13 +142,20 @@ const BED = Object.freeze({
 /**
  * How each layer sounds, as opposed to what it plays.
  *
- * Shorter and quieter than the event voices by a wide margin, and that is the
- * point: the bed is mixed to sit under the game rather than beside it. The pulse is
- * the loudest of the three and the upper figure the quietest, because a high
- * triangle at the same level as a low sine dominates everything.
+ * Shorter than the event voices, and the bed as a whole is mixed to sit under the
+ * game rather than beside it — see `MUSIC.gain`, whose size a phone set.
+ *
+ * The pulse is the one layer that does not follow that bus. At 110Hz it is below
+ * what a phone speaker reproduces at all, so raising it along with everything else
+ * would spend headroom on a frequency the device cannot play, and on a speaker that
+ * can play it, it is already the loudest thing in the bed. Holding its own gain
+ * where the tripled bus leaves its absolute level unchanged lets the figure and the
+ * counter-figure — the two a phone can actually reproduce — carry the bed instead.
+ * The upper is still the quietest of the three: it is the highest and the most
+ * efficient, so at the same level it would dominate.
  */
 const BED_VOICES = Object.freeze({
-  pulse: { type: 'sine', gain: 0.85, dur: 1.0 },
+  pulse: { type: 'sine', gain: 0.28, dur: 1.0 },
   figure: { type: 'triangle', gain: 0.30, dur: 0.18 },
   upper: { type: 'sine', gain: 0.22, dur: 0.30 },
 });

@@ -211,6 +211,28 @@ export const MUSIC = Object.freeze({
   lookaheadS: 0.12,
 
   // Where the bed sits under the master, and where it drops to when a voice plays.
+  //
+  // The size is a measurement rather than a taste. A run held paused — the bed plays
+  // on, no voice fires — and metered at the destination in 100ms windows over four
+  // seconds: at 0.5 the median window was -45.9 dBFS and the mean -41.2. That is what
+  // the owner reported on a phone: a run that seemed to have no music until the first
+  // eat. The eat was simply the first thing loud enough to hear. At 1.5 the same two
+  // figures are -37.5 and -37.4, so the typical moment in the bed came up 8.4 dB.
+  //
+  // The eat no longer holds the highest level on the board, and that is the point
+  // rather than a side effect: a bed quiet enough to stay under a voice that fires
+  // 8⅓ times a second is a bed nobody hears, which is the bug. The composite bed
+  // peaked at 0.184 against 0.121 before. What keeps the acknowledgement on top is
+  // the duck below, not the level — at 0.35 it brings that same peak down to 0.064
+  // against the eat's own 0.110 at the one moment the two are heard together.
+  //
+  // The figure is what sets the ceiling here. At 0.30 x this x 0.22 it is the bed's
+  // most prominent layer, and it shares a band with the eat; much past about 1.67 the
+  // two are level and the dip has to do all the work on its own.
+  //
+  // The bed's own layers absorb the difference; see BED_VOICES in audio.js for why
+  // the pulse is the one that does not come up with it.
+  //
   // The dip exists for legibility rather than taste: an eat fires up to 8⅓ times a
   // second and shares a band with the figure, so without it the acknowledgement
   // stops being the loudest thing at exactly the moment it matters.
@@ -219,7 +241,7 @@ export const MUSIC = Object.freeze({
   // three, because `setTargetAtTime` is within about 5% of its target after three of
   // them. Longer than the eat blip's 90ms on purpose — the dip has to outlast the
   // sound it is clearing the way for.
-  gain: 0.5,
+  gain: 1.5,
   duckGain: 0.35,
   duckS: 0.18,
 

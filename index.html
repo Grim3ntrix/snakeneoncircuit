@@ -73,7 +73,16 @@
           </div>
         </div>
 
-        <div class="overlay" id="overlay-paused" aria-live="polite">
+        <!-- `hidden` on both, and it is load-bearing rather than tidy.
+             Only the ready screen is up at load, and main.js is a module — it runs
+             after the document is parsed. Without the attribute the browser paints
+             first and hydrates second, and in that window all three overlays are
+             `display: grid` on top of each other at the same coordinates and the
+             last one in document order is what a phone shows: a full "Game over —
+             Attempts 0" screen, for as long as the module takes to arrive. On a
+             phone that is long enough to read. The attribute makes the first paint
+             the right one, and main.js only ever reveals an overlay from here. -->
+        <div class="overlay" id="overlay-paused" aria-live="polite" hidden>
           <div class="overlay__panel">
             <p class="overlay__title">Paused</p>
             <p class="overlay__detail overlay__detail--keys">Press <kbd>P</kbd> or <kbd>Escape</kbd> to resume</p>
@@ -82,7 +91,7 @@
           </div>
         </div>
 
-        <div class="overlay" id="overlay-over" aria-live="polite">
+        <div class="overlay" id="overlay-over" aria-live="polite" hidden>
           <div class="overlay__panel">
             <p class="overlay__title" id="over-title">Game over</p>
             <p class="overlay__detail" id="over-detail">Score 0</p>

@@ -232,6 +232,11 @@ Measured, not asserted:
 1. **The bed is audible.** Rendered through an `OfflineAudioContext` with a stubbed clock and
    asserted non-silent, with a peak inside a sane range — the same method 005 used for the
    voices, for the same reason: I cannot hear it.
+
+   *Superseded.* This passed and the bed was still inaudible on a phone, because an offline
+   render cannot fail the way this feature failed. See
+   [decision 004](../decisions/004-music-mix.md) for the level that replaced it and how it is
+   measured.
 2. **It grows.** Steps scheduled at length 3 and at length 40 are counted over the same
    window; the faster run schedules measurably more of them.
 3. **It layers.** At length 3 the upper figure is absent; at length 13 it is present.
