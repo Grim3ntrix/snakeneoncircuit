@@ -366,6 +366,15 @@ export function createAudio({ muted = false, music = true } = {}) {
   function tick(length) {
     if (!bedRunning) return;
 
+    // Some mobile browsers leave the context suspended immediately after
+    // creation, even inside a user gesture. If we find ourselves here with
+    // a suspended context, try to resume it and wait for the next frame
+    // rather than scheduling silent notes.
+    if (context.state === 'suspended') {
+      context.resume().catch(ignore);
+      return;
+    }
+
     const now = context.currentTime;
 
     // The hazard, and it is the audio twin of the frame loop's own dt clamp. A
