@@ -26,16 +26,24 @@ import { PHASE } from './state.js';
  * on the ready screen, over a finished run, and mid-game alike. `toggleMusic` is the
  * same kind of thing and is handled the same way.
  *
+ * `unlock` is called on the first press of any kind, and exists for a reason that is
+ * not obvious from this file: the audio context may only be built inside a user
+ * gesture, and starting a game is not the only gesture a player makes. Tapping the
+ * Music button on the ready screen is a gesture, and it is one whose entire purpose is
+ * sound — so without this, the control that turns music on would be the one control
+ * that cannot make any.
+ *
  * @param {{
  *   getState: () => { phase: string },
  *   start: (direction: {x: number, y: number} | null) => void,
  *   togglePause: () => void,
  *   toggleMute: () => void,
  *   toggleMusic: () => void,
+ *   unlock: () => void,
  *   turn: (direction: {x: number, y: number}) => void,
  * }} handlers
  */
-export function attachInput({ getState, start, togglePause, toggleMute, toggleMusic, turn }) {
+export function attachInput({ getState, start, togglePause, toggleMute, toggleMusic, unlock, turn }) {
   const pad = document.getElementById('pad');
   const pause = document.getElementById('pause');
   const sound = document.getElementById('sound');
@@ -262,10 +270,31 @@ export function attachInput({ getState, start, togglePause, toggleMute, toggleMu
     toggleMusic();
   }
 
+  /**
+   * Build the audio graph on the first press of any kind, then stop listening.
+   *
+   * Registered on `window` rather than on a control, because the point is that it
+   * does not matter what the player presses first — the pad, the Music button, or a
+   * key. Whichever it is, it is the earliest moment the browser will allow sound to
+   * exist, and there is nothing to be gained by waiting for a later one.
+   *
+   * Both events, because a keyboard-only player never fires a `pointerdown` and a
+   * touch player never fires a `keydown`. Whichever arrives first removes both: this
+   * is a one-shot, and the two listeners would otherwise both run and re-enter
+   * `unlock` on the second press for no reason.
+   */
+  function onFirstPress() {
+    unlock();
+    window.removeEventListener('pointerdown', onFirstPress);
+    window.removeEventListener('keydown', onFirstPress);
+  }
+
   pad.addEventListener('pointerdown', onPadPointerDown);
   pause.addEventListener('click', onPauseClick);
   sound.addEventListener('click', onSoundClick);
   window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('pointerdown', onFirstPress);
+  window.addEventListener('keydown', onFirstPress);
 
   for (const button of musicButtons) {
     button.addEventListener('click', onMusicClick);

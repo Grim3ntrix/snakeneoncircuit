@@ -324,7 +324,7 @@ function togglePause() {
 }
 
 /**
- * Tell the audio layer whether there is a run for the bed to be under.
+ * Tell the audio layer whether the bed should be under the game.
  *
  * Derived from the phase in one place rather than pushed from each of the three
  * that change it, because the question has one answer and three chances to be got
@@ -332,13 +332,23 @@ function togglePause() {
  *
  * A **paused** run is still a run. The bed belongs to the run, not to the game's
  * activity: stopping it on every pause and starting it again on resume would chop
- * the music into pieces and restart the figure at step zero each time. Ready and
- * over are the two phases with no run, and they are the two the bed is silent on.
+ * the music into pieces and restart the figure at step zero each time.
+ *
+ * The **ready** screen is not silent, and that reverses what 006 decided — see
+ * docs/decisions/005-menu-music.md. The bed is the game's own voice, and holding it
+ * until a run starts is what made the first sound a player heard the eat blip. It is
+ * the same bed either way, so the menu and the run it leads into are one continuous
+ * piece rather than a start: ready and playing are both "on", and the bed is already
+ * running when the first tick lands.
+ *
+ * **Over** is the one phase it stops on. A run has ended, and a bed still playing
+ * over the settled board would say the run had not really ended — which is the half
+ * of 006's reasoning that still holds.
  *
  * A hidden tab is a separate question, asked separately — see `handleVisibilityChange`.
  */
 function syncBed() {
-  audio.setPlaying(state.phase === PHASE.PLAYING || state.phase === PHASE.PAUSED);
+  audio.setPlaying(state.phase !== PHASE.OVER);
 }
 
 /**
@@ -458,6 +468,7 @@ attachInput({
   togglePause,
   toggleMute,
   toggleMusic,
+  unlock: () => audio.unlock(),
   turn: (direction) => queueDirection(state, direction),
 });
 
@@ -465,6 +476,11 @@ attachInput({
 // is not a reason to interrupt play; the dt clamp covers that case.
 document.addEventListener('visibilitychange', handleVisibilityChange);
 
+// Before the first frame, and before anything can turn the bed on later: the game
+// opens on the ready screen, and that screen wants the bed. Without this the audio
+// layer would not hear about it until the first phase change, which is a game
+// starting — the exact behaviour the menu music exists to stop.
+syncBed();
 syncDom();
 lastFrame = performance.now();
 requestAnimationFrame(frame);

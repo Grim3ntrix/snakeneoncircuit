@@ -51,11 +51,14 @@
      whole footprint — 3 x 44 + 2 x 8 = 148px — follows from it, and so does the
      arithmetic that keeps the board from shrinking to make room.
 
-     On coarse-pointer viewports wider than 600px the target grows with the
-     viewport: a 44px pad looks fine on a 320px phone but tiny on a Samsung A13
-     in desktop mode (~800px wide), where the same 44px is a tenth of the screen
-     instead of a seventh. The clamp keeps the 44px floor on phones and scales
-     to 56px at 1200px, which is still well under the shell's own cap. */
+     The floor is the wrong size on its own, because the pad is a fixed number of
+     pixels and the screen is not: 44px is a seventh of a 320px phone, and in
+     desktop mode the same 44px is drawn at 73% of itself. So the target grows with
+     the viewport, from the floor to 56px, which it reaches at 960px — still well
+     under the shell's own cap.
+
+     That is not quite enough in the one case the growth was added for, and the
+     rule below it closes the gap. */
   --touch-target: clamp(44px, 2.5vw + 32px, 56px);
 
   /* The pad's footprint: three keys and the two gaps between them. Named because
@@ -82,6 +85,35 @@
 
   --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", "Segoe UI Mono", Menlo,
     Consolas, monospace;
+}
+
+/* The one viewport where the clamp above does not reach the floor it is built on.
+
+   Desktop mode on a phone does not change the device. It changes the layout
+   viewport: `width=device-width` is ignored, the page is laid out at about 980 CSS
+   px, and that layout is then drawn at roughly 73% to fit the screen. So the 56px
+   the clamp arrives at is 41px on screen — three under the 44px floor, at exactly
+   the size where the pad also looks smallest against the screen it is on.
+
+   60px is that number exactly: 60 x 0.73 = 44. It costs the board nothing, and the
+   reasons differ by orientation rather than by device. Portrait: the board is square
+   and, at this width, limited by its column rather than by height, so the 12px the
+   pad grows into is space the board was never going to have — the row keeps its
+   full slack. Landscape: the pad sits *beside* the board rather than below it, so it
+   spends width, and width is the thing a viewport this wide has spare.
+
+   This also catches real tablets, which have no such problem, and it cannot not:
+   width on a coarse pointer is the only signal there is for desktop mode, and CSS
+   has no way to ask how wide the screen is. So the rule is written to be safe where
+   it is not needed rather than narrow enough to miss. On a tablet it spends 4px of
+   pad and nothing else — 1024x1366 and 1366x768 both keep their cell size.
+
+   The threshold sits below 980 on purpose, so that a browser whose desktop mode lays
+   out somewhat narrower than Chrome's is still caught. */
+@media (pointer: coarse) and (min-width: 900px) {
+  :root {
+    --touch-target: 60px;
+  }
 }
 
 *,

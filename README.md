@@ -5,6 +5,7 @@ A polished, framework-free take on retro Snake — built to feel finished, not j
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
 ![Dependencies: none](https://img.shields.io/badge/dependencies-none-black.svg)
 ![Vanilla JS](https://img.shields.io/badge/vanilla-HTML%20%2F%20CSS%20%2F%20JS-black.svg)
+[![Play](https://img.shields.io/badge/play-neon-green.svg)](https://grim3ntrix.github.io/snakeneoncircuit/)
 
 ## About
 
@@ -26,11 +27,19 @@ The game-over screen also counts your attempts. Those deliberately are not part 
 
 It makes a noise, and it moves. The four moments that matter — eating, dying, clearing the board, and beating your record — each get a synthesised sound and an effect on the board drawn from the circuit's own vocabulary: the eaten node's glow leaving it, and a wavefront that runs the trace when the run ends. There are no audio files. Four oscillators are smaller than one `.mp3`, and an asset pipeline is a build step wearing a different hat.
 
-Under a run there is music as well, and it is neither a loop nor a file. Three short figures are synthesised over one shared clock at lengths of **4, 16, and 11 steps**; the last two are coprime, so the bed takes 176 steps — about half a minute — to return to where it started, which is longer than most runs, and it can therefore be heard as music rather than as a loop. It opens as a low pulse and a figure, gains a counter-figure an octave up once the snake passes **length 12**, and accelerates from a step every 300 ms at the starting length to one every 150 ms by length 40. The player hears their own progress, which is the whole point of tying it to the snake. It starts with the run and stops with it — the menus stay quiet — and it ducks under the four voices, because an eat blip fires up to 8⅓ times a second and has to stay the loudest thing in the game.
+Under the game there is music as well, and it is neither a loop nor a file. Three short figures are synthesised over one shared clock at lengths of **4, 16, and 11 steps**; the last two are coprime, so the bed takes 176 steps — about half a minute — to return to where it started, which is longer than most runs, and it can therefore be heard as music rather than as a loop. It opens as a low pulse and a figure, gains a counter-figure an octave up once the snake passes **length 12**, and accelerates from a step every 300 ms at the starting length to one every 150 ms by length 40. The player hears their own progress, which is the whole point of tying it to the snake. It runs from the moment the game does — the start screen included, so the first run begins inside music rather than beside it — and it stops only when a run has ended, because a bed still playing over the settled board would say it had not really ended. It ducks under the four voices, because an eat blip fires up to 8⅓ times a second and has to stay the loudest thing in the game.
+
+**The bed cannot begin before you touch the page, and that is not a bug.** Browsers refuse to let a page make sound until the visitor has interacted with it, and no amount of code changes that — the only switch is a browser flag you would have to set yourself. So the game takes the *first* press of any kind, whatever it is for: a key, the pad, the Music button, or a click on the page. That is the earliest moment the rule allows, and the moment the music comes in.
 
 Both sound and music are on until you say otherwise, and both stay that way. <kbd>M</kbd> is the master switch and silences everything; a **Sound** button does the same on a phone. <kbd>N</kbd> toggles the bed alone, and so does a **Music** button on each overlay. Both choices are remembered along with your record, and both controls report their own state, because silence is the one thing that cannot also be the acknowledgement that it happened.
 
 The music control sits on the overlays rather than in the touch row, and that is a measurement rather than a preference: at 320px that row is 296px, and the pad, the two controls stacked beside it, and the 32px between them already account for 236 of it. The 60px left over is short of the 72px a third control would need beside the stack, and a third *in* the stack would make it taller than the pad — after which the pad is no longer what sizes the row, and the board starts paying for a button.
+
+## Screenshots
+
+| Board | Gameplay |
+| --- | --- |
+| ![Board](docs/screenshots/board.png) | ![Gameplay](docs/screenshots/gameplay.png) |
 
 ## Play it locally
 
@@ -155,7 +164,7 @@ Indicative, not a specification.
 - [x] Score persistence: your best score, kept on the device
 - [x] Audio and richer feedback
 - [x] Background music: a generative bed that grows with the snake
-- [ ] Final polish
+- [x] Final polish
 
 ## License
 

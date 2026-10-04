@@ -208,10 +208,10 @@ export function createAudio({ muted = false, music = true } = {}) {
   let master = null;
 
   // The bed's two stages, and they are separate for a reason. `musicGain` is the
-  // fades the game asks for — a run starting, a run ending — and `musicDuck` is the
-  // dip a voice asks for. One node doing both would mean a duck landing during a
-  // fade, with two ramps writing the same parameter and the gain ending wherever
-  // they happened to arrive.
+  // fades the game asks for — a screen wanting the bed, a screen not wanting it — and
+  // `musicDuck` is the dip a voice asks for. One node doing both would mean a duck
+  // landing during a fade, with two ramps writing the same parameter and the gain
+  // ending wherever they happened to arrive.
   let musicGain = null;
   let musicDuck = null;
 
@@ -219,11 +219,16 @@ export function createAudio({ muted = false, music = true } = {}) {
   let isHidden = false;
   let musicEnabled = music;
 
-  // What main.js says about the run. The bed is a *state* of the game rather than an
-  // event inside it, so it is told when a run starts and stops rather than being left
-  // to infer it from a length — length alone cannot tell a run that has just begun
-  // from one that has ended, and those want opposite things.
-  let runInProgress = false;
+  // What main.js says about whether the bed belongs under the screen the player is
+  // looking at. The bed is a *state* of the game rather than an event inside it, so it
+  // is told rather than left to infer it from a length — length alone cannot tell a run
+  // that has just begun from one that has ended, and those want opposite things.
+  //
+  // Named for the want rather than for a run, because the two stopped being the same
+  // question when the ready screen was given the bed too — see
+  // docs/decisions/005-menu-music.md. A paused run and the menu both want it; a
+  // finished run does not.
+  let bedWanted = false;
 
   // The resolved answer to "should the bed be audible", and the clock it keeps.
   // `nextStepAt` and `stepIndex` are in context time and are meaningless while
@@ -250,8 +255,8 @@ export function createAudio({ muted = false, music = true } = {}) {
 
   /**
    * Bring the bed in line with the four things that decide whether it should be
-   * audible: a run being on, the setting being on, the game not being muted, and the
-   * tab being visible.
+   * audible: the screen wanting it, the setting being on, the game not being muted,
+   * and the tab being visible.
    *
    * The whole truth table is written once, here, rather than at each of the four
    * setters that feed it. The interesting cases are the combinations — muting
@@ -265,7 +270,7 @@ export function createAudio({ muted = false, music = true } = {}) {
   function syncMusic() {
     if (context === null) return;
 
-    const wanted = runInProgress && musicEnabled && !isMuted && !isHidden;
+    const wanted = bedWanted && musicEnabled && !isMuted && !isHidden;
     if (wanted === bedRunning) return;
 
     bedRunning = wanted;
@@ -411,17 +416,25 @@ export function createAudio({ muted = false, music = true } = {}) {
   }
 
   /**
-   * Create the context, inside a gesture. Called from the one place a player can
-   * begin a game, and from nowhere else.
+   * Create the context, inside a gesture.
    *
    * The timing is the whole point of the function. A context created outside a user
    * gesture does not start, and Chrome says so in the console — which a project
    * requiring a clean console cannot accept, however convenient creating it at load
-   * would be. Nothing is lost by waiting: the ready screen has no sound to make,
-   * and this runs before any sound the game is able to produce.
+   * would be.
    *
-   * Safe to call repeatedly, and safe to call where Web Audio does not exist, in
-   * which case the game is simply silent.
+   * The consequence, and the thing worth being plain about: **no browser will let a
+   * page make sound before the player has touched it.** Music therefore cannot start
+   * the moment the page loads, and no amount of code changes that — it is the
+   * platform's rule, and the only switch that disables it is a browser flag a visitor
+   * would have to set themselves. What this can do is take the *first* press of any
+   * kind, which is the earliest moment the rule allows, and it is called from two
+   * places for that reason: `start()`, and input.js's first-press listener, so that a
+   * player who reaches for the Music button rather than the pad is not left silent.
+   *
+   * Safe to call repeatedly, which is what lets both of those call it without either
+   * having to know whether the other got there first. Safe to call where Web Audio does
+   * not exist, in which case the game is simply silent.
    */
   function unlock() {
     if (context === null) {
@@ -439,8 +452,10 @@ export function createAudio({ muted = false, music = true } = {}) {
         // context is, and a graph assembled mid-run is a graph that can be assembled
         // wrongly in front of a player.
         //
-        // `musicGain` starts at zero because the bed is not playing yet — nothing has
-        // started a run — and the first fade ramps up from exactly there.
+        // `musicGain` starts at zero and the first fade ramps up from exactly there.
+        // It is not that the bed is unwanted — the ready screen wants it — but that
+        // nothing has asked yet: `unlock()` ends by calling `syncMusic()`, which is
+        // where `bedWanted` is first answered against a real graph.
         musicGain = context.createGain();
         musicGain.gain.value = 0;
         musicGain.connect(master);
@@ -527,8 +542,11 @@ export function createAudio({ muted = false, music = true } = {}) {
       syncMusic();
     },
 
+    // Whether the bed should be under the screen the player is on. Not "is a run in
+    // progress": the ready screen wants it too, so this is a question about the bed
+    // rather than about a run — see docs/decisions/005-menu-music.md.
     setPlaying(next) {
-      runInProgress = next;
+      bedWanted = next;
       syncMusic();
     },
 
